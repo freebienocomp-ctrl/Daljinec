@@ -6,6 +6,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -38,9 +39,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.ByteArrayOutputStream
@@ -505,8 +508,10 @@ class AppState(private val ctx: Context) {
     var channel by mutableStateOf(prefs.getInt("channel", 1))
     var channelList by mutableStateOf(prefs.getString("chlist", "") ?: "")
     var stepDelay by mutableStateOf(prefs.getInt("step", 80))
+    var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
     var showSettings by mutableStateOf(false)
     var searchText by mutableStateOf("")
+    var focusReset by mutableStateOf(0)
     val found = mutableStateListOf<Pair<String, String>>()
 
     private var pairing: Pairing? = null
@@ -517,6 +522,7 @@ class AppState(private val ctx: Context) {
     private var lastDigit = 0L
 
     // položaj na EON tipkovnici (uporablja samo nit "keys")
+    // kr = 0 pomeni: izbrana je tipka za brisanje
     private var kbOpen = false
     private var kr = 1
     private var kc = 0
@@ -606,6 +612,7 @@ class AppState(private val ctx: Context) {
 
     private fun endSearch() {
         searchText = ""
+        focusReset++
         keys.execute { kbOpen = false }
     }
 
@@ -619,9 +626,10 @@ class AppState(private val ctx: Context) {
         prefs.edit().putString("chlist", t).apply()
     }
 
-    fun saveStepDelay(ms: Int) {
-        stepDelay = ms
-        prefs.edit().putInt("step", ms).apply()
+    fun saveTimings(step: Int, screen: Int) {
+        stepDelay = step
+        screenWait = screen
+        prefs.edit().putInt("step", step).putInt("screen", screen).apply()
     }
 
     /** Številka s številčnice: pošlje tipko in si zapomni program. */
@@ -656,6 +664,11 @@ class AppState(private val ctx: Context) {
 
     // ---------- sprotno tipkanje na EON tipkovnici ----------
 
+    /** Ob tapu v iskalno polje: takoj začne odpirati iskanje na TV-ju. */
+    fun prepareSearch() {
+        keys.execute { openSearchIfNeeded() }
+    }
+
     /** Klic ob vsaki spremembi besedila v polju "Išči na TV". */
     fun onSearchChange(n: String) {
         val old = searchText
@@ -680,23 +693,35 @@ class AppState(private val ctx: Context) {
         while (kc > tc) { step(21); kc-- }
     }
 
+    private fun openSearchIfNeeded() {
+        if (kbOpen) return
+        val small = maxOf(stepDelay * 2L, 150L)
+        step(3)                        // Domov
+        step(21, screenWait.toLong())  // levo -> lupa, odpre iskanje
+        step(20, small)                // dol -> mikrofon
+        step(20, small)                // dol -> A
+        kr = 1
+        kc = 0
+        kbOpen = true
+    }
+
     private fun typeOnTv(del: Int, add: List<Pair<Int, Int>>) {
         val press = stepDelay * 2L
         if (!kbOpen) {
             if (add.isEmpty()) return
-            step(3, 1800)   // Domov
-            step(21, 1200)  // levo -> lupa, odpre iskanje
-            step(20, 400)   // dol -> mikrofon
-            step(20, 400)   // dol -> A
-            kr = 1
-            kc = 0
-            kbOpen = true
+            openSearchIfNeeded()
         }
         if (del > 0) {
-            // briši: nad E je tipka za brisanje
-            moveTo(1, 5)
-            step(19, 250)
+            // briši: nad E je tipka za brisanje, na njej ostanemo
+            if (kr != 0) {
+                moveTo(1, 5)
+                step(19, 250)
+                kr = 0
+            }
             repeat(del) { step(23, press) }
+        }
+        if (add.isNotEmpty() && kr == 0) {
+            // z brisanja nazaj na tipkovnico, na A
             step(20, 250)
             repeat(5) { step(21) }
             kr = 1
@@ -727,6 +752,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         state = AppState(applicationContext)
         setContent {
             MaterialTheme(
@@ -826,6 +852,7 @@ fun SetupScreen(s: AppState) {
 fun SettingsScreen(s: AppState) {
     var list by remember { mutableStateOf(s.channelList) }
     var stepText by remember { mutableStateOf(s.stepDelay.toString()) }
+    var screenText by remember { mutableStateOf(s.screenWait.toString()) }
     val count = parseChannels(list).size
 
     Column(
@@ -848,11 +875,22 @@ fun SettingsScreen(s: AppState) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Text("Manjše število = hitrejše tipkanje. Če črke manjkajo, ga povečaj (privzeto 80).", color = DimColor, fontSize = 13.sp)
+        Text("Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        OutlinedTextField(
+            value = screenText,
+            onValueChange = { screenText = it.filter { c -> c.isDigit() }.take(4) },
+            label = { Text("Čakanje na odprtje iskanja (ms)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Koliko časa aplikacija počaka, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.", color = DimColor, fontSize = 13.sp)
         Button(
             onClick = {
                 s.saveChannelList(list)
-                s.saveStepDelay((stepText.toIntOrNull() ?: 80).coerceIn(30, 1000))
+                s.saveTimings(
+                    (stepText.toIntOrNull() ?: 80).coerceIn(5, 1000),
+                    (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000)
+                )
                 s.showSettings = false
             },
             modifier = Modifier.fillMaxWidth()
@@ -954,6 +992,11 @@ fun DPad(s: AppState, modifier: Modifier) {
 fun RemoteScreen(s: AppState) {
     var testCode by remember { mutableStateOf("") }
     val gap = Arrangement.spacedBy(8.dp)
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(s.focusReset) {
+        focusManager.clearFocus()
+    }
 
     Column(
         Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -983,7 +1026,9 @@ fun RemoteScreen(s: AppState) {
                 placeholder = { Text("Išči na TV (tipkaj)") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { if (it.isFocused) s.prepareSearch() }
             )
             FilledTonalButton(
                 onClick = { s.onSearchChange("") },
