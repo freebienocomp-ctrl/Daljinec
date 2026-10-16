@@ -440,12 +440,15 @@ class AppState(private val ctx: Context) {
     var connected by mutableStateOf(false)
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
+    var channel by mutableStateOf(prefs.getInt("channel", 1))
     val found = mutableStateListOf<Pair<String, String>>()
 
     private var pairing: Pairing? = null
     private var remote: RemoteConnection? = null
     private var gen = 0
     private var running = false
+    private var entry = ""
+    private var lastDigit = 0L
 
     fun addFound(name: String, ip: String) {
         if (ip.isEmpty() || ip.contains(':')) return
@@ -526,6 +529,33 @@ class AppState(private val ctx: Context) {
 
     fun key(code: Int) {
         keys.execute { remote?.key(code) }
+    }
+
+    private fun saveChannel(c: Int) {
+        channel = c
+        prefs.edit().putInt("channel", c).apply()
+    }
+
+    /** Številka s številčnice: pošlje tipko in si zapomni program. */
+    fun digit(n: Int) {
+        val now = System.currentTimeMillis()
+        entry = if (now - lastDigit < 2000 && entry.length < 4) entry + n else n.toString()
+        lastDigit = now
+        entry.toIntOrNull()?.let { if (it > 0) saveChannel(it) }
+        key(7 + n)
+    }
+
+    /** Prog + / Prog −: vtipka naslednjo ali prejšnjo številko programa. */
+    fun channelStep(d: Int) {
+        val c = (channel + d).coerceAtLeast(1)
+        saveChannel(c)
+        entry = ""
+        keys.execute {
+            for (ch in c.toString()) {
+                remote?.key(7 + (ch - '0'))
+                Thread.sleep(150)
+            }
+        }
     }
 
     fun sync(old: String, new: String) {
@@ -658,6 +688,7 @@ fun RBtn(
 @Composable
 fun RemoteScreen(s: AppState) {
     var text by remember { mutableStateOf("") }
+    var testCode by remember { mutableStateOf("") }
     val gap = Arrangement.spacedBy(6.dp)
 
     Column(
@@ -666,7 +697,7 @@ fun RemoteScreen(s: AppState) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (s.connected) "● Povezano" else "○ " + s.status.ifEmpty { "Povezujem…" },
+                if (s.connected) "● Povezano  ·  Program ${s.channel}" else "○ " + s.status.ifEmpty { "Povezujem…" },
                 Modifier.weight(1f),
                 fontSize = 13.sp
             )
@@ -687,7 +718,6 @@ fun RemoteScreen(s: AppState) {
             FilledTonalButton(onClick = { s.key(66) }) { Text("Enter") }
         }
 
-        var testCode by remember { mutableStateOf("") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = testCode,
@@ -698,17 +728,18 @@ fun RemoteScreen(s: AppState) {
             )
             FilledTonalButton(onClick = { testCode.toIntOrNull()?.let { s.key(it) } }) { Text("Pošlji") }
         }
+
         Column(Modifier.weight(4f).fillMaxWidth(), verticalArrangement = gap) {
             listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9)).forEach { r ->
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
                     r.forEach { n ->
-                        RBtn(n.toString(), Modifier.weight(1f).fillMaxHeight()) { s.key(7 + n) }
+                        RBtn(n.toString(), Modifier.weight(1f).fillMaxHeight()) { s.digit(n) }
                     }
                 }
             }
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
                 Spacer(Modifier.weight(1f))
-                RBtn("0", Modifier.weight(1f).fillMaxHeight()) { s.key(7) }
+                RBtn("0", Modifier.weight(1f).fillMaxHeight()) { s.digit(0) }
                 Spacer(Modifier.weight(1f))
             }
         }
@@ -745,8 +776,8 @@ fun RemoteScreen(s: AppState) {
                 RBtn("Utišaj", Modifier.fillMaxWidth().height(56.dp)) { s.key(164) }
             }
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = gap) {
-                RBtn("Prog ▲", Modifier.weight(1f).fillMaxWidth()) { s.key(92) }
-                RBtn("Prog ▼", Modifier.weight(1f).fillMaxWidth()) { s.key(93) }
+                RBtn("Prog ▲", Modifier.weight(1f).fillMaxWidth()) { s.channelStep(1) }
+                RBtn("Prog ▼", Modifier.weight(1f).fillMaxWidth()) { s.channelStep(-1) }
             }
         }
     }
