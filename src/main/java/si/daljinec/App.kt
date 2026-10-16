@@ -8,21 +8,38 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +68,15 @@ import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+
+// ---------- barve ----------
+
+val BgColor = Color(0xFF121417)
+val KeyColor = Color(0xFF24282E)
+val TextColor = Color(0xFFE8EAED)
+val DimColor = Color(0xFF8A9099)
+val AccentColor = Color(0xFF3B82F6)
+val GreenColor = Color(0xFF4ADE80)
 
 // ---------- minimalni protobuf ----------
 
@@ -414,18 +440,7 @@ class Discovery(ctx: Context, private val onFound: (String, String) -> Unit) {
     }
 }
 
-// ---------- tipke in seznam programov ----------
-
-fun charToKey(c: Char): Int? = when (val ch = c.lowercaseChar()) {
-    in 'a'..'z' -> 29 + (ch - 'a')
-    in '0'..'9' -> 7 + (ch - '0')
-    ' ' -> 62
-    'č', 'ć' -> 31
-    'š' -> 47
-    'ž' -> 54
-    'đ' -> 32
-    else -> null
-}
+// ---------- seznam programov ----------
 
 /** "1-10, 12, 15-20" -> seznam številk */
 fun parseChannels(t: String): List<Int> {
@@ -447,6 +462,32 @@ fun parseChannels(t: String): List<Int> {
     return out.toList()
 }
 
+// ---------- EON tipkovnica ----------
+
+/** Vrstice 1-5 EON tipkovnice, vsaka ima 6 stolpcev. */
+val EON_ROWS = listOf(
+    "ABCČDE",
+    "FGHIJK",
+    "LMNOPR",
+    "SŠTUVZ",
+    "Ž:;.,-"
+)
+
+/** Vrne (vrstica, stolpec) za znak, -1 za presledek ali null, če znaka ni. */
+fun eonPos(ch: Char): Pair<Int, Int>? {
+    val c = when (val u = ch.uppercaseChar()) {
+        'Ć' -> 'Č'
+        'Đ' -> 'D'
+        else -> u
+    }
+    if (c == ' ') return Pair(-1, -1)
+    EON_ROWS.forEachIndexed { r, row ->
+        val col = row.indexOf(c)
+        if (col >= 0) return Pair(r + 1, col)
+    }
+    return null
+}
+
 // ---------- stanje aplikacije ----------
 
 class AppState(private val ctx: Context) {
@@ -461,6 +502,7 @@ class AppState(private val ctx: Context) {
     var connected by mutableStateOf(false)
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
+    var searching by mutableStateOf(false)
     var channel by mutableStateOf(prefs.getInt("channel", 1))
     var channelList by mutableStateOf(prefs.getString("chlist", "") ?: "")
     var showSettings by mutableStateOf(false)
@@ -593,22 +635,46 @@ class AppState(private val ctx: Context) {
         }
     }
 
-    fun sync(old: String, new: String) {
-        var common = 0
-        while (common < old.length && common < new.length && old[common] == new[common]) common++
-        val del = old.length - common
-        val add = new.substring(common)
+    /** Odpre EON iskanje (Domov, levo) in vtipka besedilo po EON tipkovnici. */
+    fun searchOnTv(text: String) {
+        val targets = text.mapNotNull { eonPos(it) }
+        if (targets.isEmpty()) return
+        searching = true
         keys.execute {
-            repeat(del) {
-                remote?.key(67)
-                Thread.sleep(60)
+            fun k(code: Int, wait: Long = 160) {
+                remote?.key(code)
+                Thread.sleep(wait)
             }
-            for (ch in add) {
-                val k = charToKey(ch)
-                if (k != null) {
-                    remote?.key(k)
-                    Thread.sleep(60)
+            try {
+                k(3, 1800)   // Domov
+                k(21, 1200)  // levo -> lupa, odpre iskanje
+                k(20, 400)   // dol -> mikrofon
+                k(20, 400)   // dol -> A
+                var r = 1
+                var c = 0
+                for ((tr, tc) in targets) {
+                    if (tr == -1) {
+                        // presledek: na vrstico 5, stolpec 2, nato dol
+                        while (r < 5) { k(20); r++ }
+                        while (c < 2) { k(22); c++ }
+                        while (c > 2) { k(21); c-- }
+                        k(20)
+                        k(23, 300)
+                        // nazaj gor in na začetek vrstice (Ž)
+                        k(19)
+                        repeat(5) { k(21) }
+                        r = 5
+                        c = 0
+                        continue
+                    }
+                    while (r < tr) { k(20); r++ }
+                    while (r > tr) { k(19); r-- }
+                    while (c < tc) { k(22); c++ }
+                    while (c > tc) { k(21); c-- }
+                    k(23, 300)
                 }
+            } finally {
+                searching = false
             }
         }
     }
@@ -623,8 +689,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         state = AppState(applicationContext)
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) { App(state) }
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = AccentColor,
+                    onPrimary = Color.White,
+                    background = BgColor,
+                    surface = BgColor,
+                    onBackground = TextColor,
+                    onSurface = TextColor,
+                    secondaryContainer = KeyColor,
+                    onSecondaryContainer = TextColor
+                )
+            ) {
+                Surface(Modifier.fillMaxSize(), color = BgColor) { App(state) }
             }
         }
     }
@@ -748,17 +825,77 @@ fun SettingsScreen(s: AppState) {
 fun RBtn(
     label: String,
     modifier: Modifier = Modifier,
-    primary: Boolean = false,
+    fontSize: Int = 22,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    if (primary) {
-        Button(onClick = onClick, modifier = modifier, shape = shape, contentPadding = PaddingValues(0.dp)) {
-            Text(label, fontSize = 20.sp)
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Text(label, fontSize = fontSize.sp)
+    }
+}
+
+@Composable
+fun IconLabelBtn(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
+            Text(label, fontSize = 11.sp, color = DimColor)
         }
-    } else {
-        FilledTonalButton(onClick = onClick, modifier = modifier, shape = shape, contentPadding = PaddingValues(0.dp)) {
-            Text(label, fontSize = 20.sp)
+    }
+}
+
+@Composable
+fun ArrowBtn(icon: ImageVector, desc: String, modifier: Modifier, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(0.dp)) {
+        Icon(icon, contentDescription = desc, modifier = Modifier.size(36.dp), tint = Color(0xFFC4C8CE))
+    }
+}
+
+@Composable
+fun DPad(s: AppState, modifier: Modifier) {
+    Box(
+        modifier
+            .aspectRatio(1f, matchHeightConstraintsFirst = true)
+            .clip(CircleShape)
+            .background(KeyColor)
+    ) {
+        ArrowBtn(
+            Icons.Filled.KeyboardArrowUp, "Gor",
+            Modifier.align(Alignment.TopCenter).fillMaxWidth(0.34f).fillMaxHeight(0.3f)
+        ) { s.key(19) }
+        ArrowBtn(
+            Icons.Filled.KeyboardArrowDown, "Dol",
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.34f).fillMaxHeight(0.3f)
+        ) { s.key(20) }
+        ArrowBtn(
+            Icons.Filled.KeyboardArrowLeft, "Levo",
+            Modifier.align(Alignment.CenterStart).fillMaxWidth(0.3f).fillMaxHeight(0.34f)
+        ) { s.key(21) }
+        ArrowBtn(
+            Icons.Filled.KeyboardArrowRight, "Desno",
+            Modifier.align(Alignment.CenterEnd).fillMaxWidth(0.3f).fillMaxHeight(0.34f)
+        ) { s.key(22) }
+        Button(
+            onClick = { s.key(23) },
+            modifier = Modifier.align(Alignment.Center).fillMaxSize(0.38f),
+            shape = CircleShape,
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text("OK", fontSize = 18.sp)
         }
     }
 }
@@ -767,33 +904,42 @@ fun RBtn(
 fun RemoteScreen(s: AppState) {
     var text by remember { mutableStateOf("") }
     var testCode by remember { mutableStateOf("") }
-    val gap = Arrangement.spacedBy(6.dp)
+    val gap = Arrangement.spacedBy(8.dp)
 
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (s.connected) "● Povezano  ·  Program ${s.channel}" else "○ " + s.status.ifEmpty { "Povezujem…" },
+                if (s.connected) "●" else "○",
+                color = if (s.connected) GreenColor else DimColor,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (s.connected) "Povezano  ·  Program ${s.channel}" else s.status.ifEmpty { "Povezujem…" },
                 Modifier.weight(1f),
                 fontSize = 13.sp
             )
-            TextButton(onClick = { s.showSettings = true }) { Text("Nastavitve") }
+            IconButton(onClick = { s.showSettings = true }) {
+                Icon(Icons.Filled.Settings, contentDescription = "Nastavitve", tint = DimColor)
+            }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = text,
-                onValueChange = { n ->
-                    s.sync(text, n)
-                    text = n
-                },
-                placeholder = { Text("Išči (tipkaj sem)") },
+                onValueChange = { text = it },
+                placeholder = { Text("Išči na TV") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
-            FilledTonalButton(onClick = { s.key(66) }) { Text("Enter") }
+            FilledTonalButton(
+                onClick = { s.searchOnTv(text) },
+                enabled = text.isNotBlank() && !s.searching
+            ) { Text(if (s.searching) "…" else "Išči") }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
@@ -822,40 +968,31 @@ fun RemoteScreen(s: AppState) {
             }
         }
 
-        Column(Modifier.weight(3.4f).fillMaxWidth(), verticalArrangement = gap) {
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
-                Spacer(Modifier.weight(1f))
-                RBtn("▲", Modifier.weight(1f).fillMaxHeight()) { s.key(19) }
-                Spacer(Modifier.weight(1f))
-            }
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
-                RBtn("◀", Modifier.weight(1f).fillMaxHeight()) { s.key(21) }
-                RBtn("OK", Modifier.weight(1f).fillMaxHeight(), primary = true) { s.key(23) }
-                RBtn("▶", Modifier.weight(1f).fillMaxHeight()) { s.key(22) }
-            }
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
-                Spacer(Modifier.weight(1f))
-                RBtn("▼", Modifier.weight(1f).fillMaxHeight()) { s.key(20) }
-                Spacer(Modifier.weight(1f))
-            }
+        Box(Modifier.weight(4.2f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            DPad(s, Modifier.fillMaxHeight())
         }
 
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
-            RBtn("← Nazaj", Modifier.weight(1f).fillMaxHeight()) { s.key(4) }
-            RBtn("Domov", Modifier.weight(1f).fillMaxHeight()) { s.key(3) }
+        Row(Modifier.weight(1.2f).fillMaxWidth(), horizontalArrangement = gap) {
+            IconLabelBtn(Icons.Filled.ArrowBack, "Nazaj", Modifier.weight(1f).fillMaxHeight()) { s.key(4) }
+            IconLabelBtn(Icons.Filled.Home, "Domov", Modifier.weight(1f).fillMaxHeight()) { s.key(3) }
         }
 
         Row(Modifier.weight(2.2f).fillMaxWidth(), horizontalArrangement = gap) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = gap) {
-                RBtn("Vol +", Modifier.weight(1f).fillMaxWidth()) { s.key(24) }
-                RBtn("Vol −", Modifier.weight(1f).fillMaxWidth()) { s.key(25) }
+                RBtn("🔊", Modifier.weight(1f).fillMaxWidth(), 20) { s.key(24) }
+                RBtn("🔉", Modifier.weight(1f).fillMaxWidth(), 20) { s.key(25) }
             }
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-                RBtn("Utišaj", Modifier.fillMaxWidth().height(56.dp)) { s.key(164) }
+            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                FilledTonalButton(
+                    onClick = { s.key(164) },
+                    modifier = Modifier.size(64.dp),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp)
+                ) { Text("🔇", fontSize = 20.sp) }
             }
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = gap) {
-                RBtn("Prog ▲", Modifier.weight(1f).fillMaxWidth()) { s.channelStep(1) }
-                RBtn("Prog ▼", Modifier.weight(1f).fillMaxWidth()) { s.channelStep(-1) }
+                RBtn("P ▲", Modifier.weight(1f).fillMaxWidth(), 18) { s.channelStep(1) }
+                RBtn("P ▼", Modifier.weight(1f).fillMaxWidth(), 18) { s.channelStep(-1) }
             }
         }
     }
