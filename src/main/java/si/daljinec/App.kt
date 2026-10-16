@@ -697,7 +697,8 @@ fun RemoteScreen(s: AppState) {
                 modifier = Modifier.weight(1f)
             )
             FilledTonalButton(onClick = { testCode.toIntOrNull()?.let { s.key(it) } }) { Text("Pošlji") }
-        }        Column(Modifier.weight(4f).fillMaxWidth(), verticalArrangement = gap) {
+        }
+        Column(Modifier.weight(4f).fillMaxWidth(), verticalArrangement = gap) {
             listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9)).forEach { r ->
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
                     r.forEach { n ->
