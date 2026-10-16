@@ -6,17 +6,34 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -25,7 +42,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,17 +49,30 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.ByteArrayOutputStream
@@ -67,6 +96,11 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509KeyManager
 import javax.net.ssl.X509TrustManager
+import kotlin.math.atan2
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
@@ -74,12 +108,17 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 
 // ---------- barve ----------
 
-val BgColor = Color(0xFF121417)
-val KeyColor = Color(0xFF24282E)
-val TextColor = Color(0xFFE8EAED)
+val ScreenColor = Color(0xFF050607)
+val TextColor = Color(0xFFEEF0F2)
 val DimColor = Color(0xFF8A9099)
+val LabelColor = Color(0xFF9AA0A8)
 val AccentColor = Color(0xFF3B82F6)
 val GreenColor = Color(0xFF4ADE80)
+val GlowColor = Color(0xFF60A5FA)
+val ArrowColor = Color(0xFFC8CCD2)
+val ArrowLit = Color(0xFF93C5FD)
+val BodyBrush = Brush.verticalGradient(listOf(Color(0xFF0C0E10), Color(0xFF060708)))
+val KeyBrush = Brush.verticalGradient(listOf(Color(0xFF2C3138), Color(0xFF22262C)))
 
 // ---------- minimalni protobuf ----------
 
@@ -383,7 +422,8 @@ class RemoteConnection(
         }
     }
 
-    fun key(code: Int) = send(PbWriter().msg(10, PbWriter().int(1, code).int(2, 3)))
+    /** dir: 1 = tipka pritisnjena, 2 = tipka spuščena, 3 = kratek pritisk */
+    fun key(code: Int, dir: Int = 3) = send(PbWriter().msg(10, PbWriter().int(1, code).int(2, dir)))
 
     fun close() {
         try { socket?.close() } catch (_: Exception) {}
@@ -512,7 +552,9 @@ class AppState(private val ctx: Context) {
     var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
     var showSettings by mutableStateOf(false)
     var searchText by mutableStateOf("")
-    var focusReset by mutableStateOf(0)
+    var searchOpen by mutableStateOf(false)
+    var searchReady by mutableStateOf(false)
+    var ledTick by mutableStateOf(0)
     val found = mutableStateListOf<Pair<String, String>>()
 
     private var pairing: Pairing? = null
@@ -605,16 +647,25 @@ class AppState(private val ctx: Context) {
         connected = false
     }
 
-    /** Gumb na daljincu: konča iskanje in pošlje tipko. */
-    fun key(code: Int) {
-        endSearch()
-        keys.execute { remote?.key(code) }
+    // ---------- tipke ----------
+
+    /** Kratek pritisk (konča iskanje). */
+    fun press(code: Int) {
+        closeSearch()
+        ledTick++
+        keys.execute { remote?.key(code, 3) }
     }
 
-    private fun endSearch() {
-        searchText = ""
-        focusReset++
-        keys.execute { kbOpen = false }
+    /** Pravo držanje: tipka pritisnjena. */
+    fun keyDown(code: Int) {
+        closeSearch()
+        ledTick++
+        keys.execute { remote?.key(code, 1) }
+    }
+
+    /** Pravo držanje: tipka spuščena. */
+    fun keyUp(code: Int) {
+        keys.execute { remote?.key(code, 2) }
     }
 
     private fun saveChannel(c: Int) {
@@ -640,7 +691,7 @@ class AppState(private val ctx: Context) {
         entry = if (now - lastDigit < 2000 && entry.length < 4) entry + n else n.toString()
         lastDigit = now
         entry.toIntOrNull()?.let { if (it > 0) saveChannel(it) }
-        key(7 + n)
+        press(7 + n)
     }
 
     /** Prog + / Prog −: takoj vtipka naslednji obstoječi program in potrdi z OK. */
@@ -653,7 +704,8 @@ class AppState(private val ctx: Context) {
         }
         saveChannel(c)
         entry = ""
-        endSearch()
+        closeSearch()
+        ledTick++
         keys.execute {
             for (ch in c.toString()) {
                 remote?.key(7 + (ch - '0'))
@@ -664,14 +716,32 @@ class AppState(private val ctx: Context) {
         }
     }
 
-    // ---------- sprotno tipkanje na EON tipkovnici ----------
+    // ---------- iskanje na EON tipkovnici ----------
 
-    /** Ob tapu v iskalno polje: takoj začne odpirati iskanje na TV-ju. */
-    fun prepareSearch() {
-        keys.execute { openSearchIfNeeded() }
+    /** Tap na lupo: razširi polje in takoj začne odpirati iskanje na TV-ju. */
+    fun openSearchUi() {
+        if (searchOpen) return
+        searchOpen = true
+        searchReady = false
+        searchText = ""
+        ledTick++
+        keys.execute {
+            openSearchIfNeeded()
+            searchReady = true
+        }
     }
 
-    /** Klic ob vsaki spremembi besedila v polju "Išči na TV". */
+    /** ✕ ali katerakoli druga tipka: zapre polje. */
+    fun closeSearch() {
+        if (searchOpen || searchText.isNotEmpty()) {
+            searchOpen = false
+            searchReady = false
+            searchText = ""
+        }
+        keys.execute { kbOpen = false }
+    }
+
+    /** Klic ob vsaki spremembi besedila v iskalnem polju. */
     fun onSearchChange(n: String) {
         val old = searchText
         searchText = n
@@ -748,7 +818,7 @@ class AppState(private val ctx: Context) {
     }
 }
 
-// ---------- zasloni ----------
+// ---------- glavna aktivnost ----------
 
 class MainActivity : ComponentActivity() {
     private lateinit var state: AppState
@@ -762,15 +832,13 @@ class MainActivity : ComponentActivity() {
                 colorScheme = darkColorScheme(
                     primary = AccentColor,
                     onPrimary = Color.White,
-                    background = BgColor,
-                    surface = BgColor,
+                    background = ScreenColor,
+                    surface = ScreenColor,
                     onBackground = TextColor,
-                    onSurface = TextColor,
-                    secondaryContainer = KeyColor,
-                    onSecondaryContainer = TextColor
+                    onSurface = TextColor
                 )
             ) {
-                Surface(Modifier.fillMaxSize(), color = BgColor) { App(state) }
+                Surface(Modifier.fillMaxSize(), color = ScreenColor) { App(state) }
             }
         }
     }
@@ -794,6 +862,8 @@ fun App(s: AppState) {
         else -> RemoteScreen(s)
     }
 }
+
+// ---------- uparjanje ----------
 
 @Composable
 fun SetupScreen(s: AppState) {
@@ -851,12 +921,15 @@ fun SetupScreen(s: AppState) {
     }
 }
 
+// ---------- nastavitve ----------
+
 @Composable
 fun SettingsScreen(s: AppState) {
     var list by remember { mutableStateOf(s.channelList) }
     var stepText by remember { mutableStateOf(s.stepDelay.toString()) }
     var homeText by remember { mutableStateOf(s.homeWait.toString()) }
     var screenText by remember { mutableStateOf(s.screenWait.toString()) }
+    var testCode by remember { mutableStateOf("") }
     val count = parseChannels(list).size
 
     Column(
@@ -912,6 +985,25 @@ fun SettingsScreen(s: AppState) {
             onClick = { s.showSettings = false },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Nazaj") }
+
+        Spacer(Modifier.height(8.dp))
+        Text("Preizkus kode tipke", style = MaterialTheme.typography.titleMedium)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = testCode,
+                onValueChange = { testCode = it.filter { c -> c.isDigit() }.take(3) },
+                label = { Text("Test koda") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            Button(onClick = { testCode.toIntOrNull()?.let { s.press(it) } }) { Text("Pošlji") }
+        }
+
+        Spacer(Modifier.height(8.dp))
         OutlinedButton(
             onClick = {
                 s.showSettings = false
@@ -922,184 +1014,430 @@ fun SettingsScreen(s: AppState) {
     }
 }
 
+// ---------- gradniki daljinca ----------
+
+/** Okrogla tipka: ob pritisku se nagne proti prstu, zasveti in se prožno vrne. */
 @Composable
-fun RBtn(
-    label: String,
-    modifier: Modifier = Modifier,
-    fontSize: Int = 22,
-    onClick: () -> Unit
+fun RoundKey(
+    diameter: Dp,
+    onDown: () -> Unit,
+    onUp: () -> Unit = {},
+    content: @Composable BoxScope.() -> Unit
 ) {
-    FilledTonalButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        contentPadding = PaddingValues(0.dp)
-    ) {
-        Text(label, fontSize = fontSize.sp)
-    }
-}
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    val rx = remember { Animatable(0f) }
+    val ry = remember { Animatable(0f) }
+    val sc = remember { Animatable(1f) }
+    val glow = remember { Animatable(0f) }
+    val down by rememberUpdatedState(onDown)
+    val up by rememberUpdatedState(onUp)
 
-@Composable
-fun IconLabelBtn(
-    icon: ImageVector,
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    FilledTonalButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        contentPadding = PaddingValues(0.dp)
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
-            Text(label, fontSize = 11.sp, color = DimColor)
-        }
-    }
-}
-
-@Composable
-fun ArrowBtn(icon: ImageVector, desc: String, modifier: Modifier, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(0.dp)) {
-        Icon(icon, contentDescription = desc, modifier = Modifier.size(36.dp), tint = Color(0xFFC4C8CE))
-    }
-}
-
-@Composable
-fun DPad(s: AppState, modifier: Modifier) {
     Box(
-        modifier
-            .aspectRatio(1f, matchHeightConstraintsFirst = true)
+        Modifier
+            .size(diameter)
+            .graphicsLayer {
+                rotationX = rx.value
+                rotationY = ry.value
+                scaleX = sc.value
+                scaleY = sc.value
+                cameraDistance = 10f * density
+            }
+            .shadow(6.dp, CircleShape)
             .clip(CircleShape)
-            .background(KeyColor)
+            .background(KeyBrush)
+            .border(1.5.dp, GlowColor.copy(alpha = 0.8f * glow.value), CircleShape)
+            .pointerInput(Unit) {
+                val hw = size.width / 2f
+                val hh = size.height / 2f
+                detectTapGestures(onPress = { o ->
+                    val nx = ((o.x - hw) / hw).coerceIn(-1f, 1f)
+                    val ny = ((o.y - hh) / hh).coerceIn(-1f, 1f)
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    down()
+                    scope.launch { rx.animateTo(-ny * 16f, tween(70)) }
+                    scope.launch { ry.animateTo(nx * 16f, tween(70)) }
+                    scope.launch { sc.animateTo(0.94f, tween(70)) }
+                    scope.launch { glow.snapTo(1f) }
+                    tryAwaitRelease()
+                    up()
+                    scope.launch { rx.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 600f)) }
+                    scope.launch { ry.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 600f)) }
+                    scope.launch { sc.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 600f)) }
+                    scope.launch { glow.animateTo(0f, tween(450)) }
+                })
+            },
+        contentAlignment = Alignment.Center,
+        content = content
+    )
+}
+
+@Composable
+fun IconLabel(icon: ImageVector, label: String, k: Float) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp * k), tint = TextColor)
+        Text(label, fontSize = (11 * k).sp, color = LabelColor)
+    }
+}
+
+@Composable
+fun Arrow(icon: ImageVector, desc: String, lit: Boolean, modifier: Modifier, k: Float) {
+    val c by animateColorAsState(
+        if (lit) ArrowLit else ArrowColor,
+        tween(if (lit) 60 else 350),
+        label = "arrow"
+    )
+    Icon(icon, contentDescription = desc, modifier = modifier.size(42.dp * k), tint = c)
+}
+
+/** Smerni krog: nagne se v smer pritiska, puščice se držijo kot na fizičnem daljincu. */
+@Composable
+fun DPad(s: AppState, diameter: Dp, k: Float) {
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    val rx = remember { Animatable(0f) }
+    val ry = remember { Animatable(0f) }
+    val okScale = remember { Animatable(1f) }
+    var lit by remember { mutableStateOf(-1) } // 0 gor, 1 desno, 2 dol, 3 levo
+
+    Box(
+        Modifier
+            .size(diameter)
+            .graphicsLayer {
+                rotationX = rx.value
+                rotationY = ry.value
+                cameraDistance = 14f * density
+            }
+            .shadow(10.dp, CircleShape)
+            .clip(CircleShape)
+            .background(Brush.radialGradient(listOf(Color(0xFF2E333A), Color(0xFF1F2328))))
+            .pointerInput(Unit) {
+                val c = size.width / 2f
+                detectTapGestures(onPress = { o ->
+                    val dx = o.x - c
+                    val dy = o.y - c
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    if (hypot(dx, dy) < c * 0.37f) {
+                        s.press(23)
+                        scope.launch { okScale.animateTo(0.92f, tween(70)) }
+                        tryAwaitRelease()
+                        scope.launch { okScale.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 600f)) }
+                    } else {
+                        val a = Math.toDegrees(atan2(dy, dx).toDouble())
+                        val dir = when {
+                            a > -135 && a <= -45 -> 0
+                            a > -45 && a <= 45 -> 1
+                            a > 45 && a <= 135 -> 2
+                            else -> 3
+                        }
+                        val code = intArrayOf(19, 22, 20, 21)[dir]
+                        lit = dir
+                        s.keyDown(code)
+                        val tx = floatArrayOf(10f, 0f, -10f, 0f)[dir]
+                        val ty = floatArrayOf(0f, 10f, 0f, -10f)[dir]
+                        scope.launch { rx.animateTo(tx, tween(70)) }
+                        scope.launch { ry.animateTo(ty, tween(70)) }
+                        tryAwaitRelease()
+                        s.keyUp(code)
+                        scope.launch { rx.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 600f)) }
+                        scope.launch { ry.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 600f)) }
+                        scope.launch {
+                            delay(250)
+                            if (lit == dir) lit = -1
+                        }
+                    }
+                })
+            }
     ) {
-        ArrowBtn(
-            Icons.Filled.KeyboardArrowUp, "Gor",
-            Modifier.align(Alignment.TopCenter).fillMaxWidth(0.34f).fillMaxHeight(0.3f)
-        ) { s.key(19) }
-        ArrowBtn(
-            Icons.Filled.KeyboardArrowDown, "Dol",
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.34f).fillMaxHeight(0.3f)
-        ) { s.key(20) }
-        ArrowBtn(
-            Icons.Filled.KeyboardArrowLeft, "Levo",
-            Modifier.align(Alignment.CenterStart).fillMaxWidth(0.3f).fillMaxHeight(0.34f)
-        ) { s.key(21) }
-        ArrowBtn(
-            Icons.Filled.KeyboardArrowRight, "Desno",
-            Modifier.align(Alignment.CenterEnd).fillMaxWidth(0.3f).fillMaxHeight(0.34f)
-        ) { s.key(22) }
-        Button(
-            onClick = { s.key(23) },
-            modifier = Modifier.align(Alignment.Center).fillMaxSize(0.38f),
-            shape = CircleShape,
-            contentPadding = PaddingValues(0.dp)
+        Arrow(Icons.Filled.KeyboardArrowUp, "Gor", lit == 0, Modifier.align(Alignment.TopCenter).padding(top = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowDown, "Dol", lit == 2, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowLeft, "Levo", lit == 3, Modifier.align(Alignment.CenterStart).padding(start = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowRight, "Desno", lit == 1, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp * k), k)
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .size(diameter * 0.37f)
+                .graphicsLayer {
+                    scaleX = okScale.value
+                    scaleY = okScale.value
+                }
+                .shadow(6.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF5B9BFF), Color(0xFF2F6FE4)))),
+            contentAlignment = Alignment.Center
         ) {
-            Text("OK", fontSize = 18.sp)
+            Text("OK", color = Color.White, fontSize = (22 * k).sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
+
+/** Lučka, ki utripne ob vsakem pošiljanju, in vrstica stanja. */
+@Composable
+fun StatusBar(s: AppState) {
+    val a = remember { Animatable(0f) }
+    val b = remember { Animatable(0f) }
+    LaunchedEffect(s.ledTick) {
+        if (s.ledTick > 0) {
+            a.snapTo(1f)
+            a.animateTo(0f, tween(220))
+        }
+    }
+    LaunchedEffect(s.searchOpen, s.searchReady) {
+        while (s.searchOpen && !s.searchReady) {
+            b.snapTo(1f)
+            b.animateTo(0f, tween(160))
+            delay(20)
+        }
+        b.snapTo(0f)
+    }
+    val v = max(a.value, b.value)
+
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(lerp(Color(0xFF2A2F36), Color(0xFFFF4D4D), v))
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (s.connected) "●" else "○",
+            color = if (s.connected) GreenColor else DimColor,
+            fontSize = 12.sp
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            if (s.connected) "Povezano  ·  Program ${s.channel}" else s.status.ifEmpty { "Povezujem…" },
+            Modifier.weight(1f),
+            fontSize = 12.sp,
+            color = LabelColor
+        )
+        IconButton(onClick = { s.showSettings = true }) {
+            Icon(Icons.Filled.Settings, contentDescription = "Nastavitve", tint = DimColor)
+        }
+    }
+}
+
+/** Modra lupa, ki se ob tapu razširi v iskalno polje do robov tipk 1 in 3. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
+    val h = 48.dp * k
+    val view = LocalView.current
+    val focus = remember { FocusRequester() }
+    val kb = LocalSoftwareKeyboardController.current
+    val fm = LocalFocusManager.current
+
+    LaunchedEffect(s.searchOpen) {
+        if (s.searchOpen) {
+            delay(150)
+            try { focus.requestFocus() } catch (_: Exception) {}
+            kb?.show()
+        } else {
+            fm.clearFocus()
+            kb?.hide()
+        }
+    }
+
+    val pulse = rememberInfiniteTransition(label = "pulse")
+    val pa by pulse.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
+        label = "pa"
+    )
+    val borderColor = when {
+        !s.searchOpen -> Color.Transparent
+        s.searchReady -> GreenColor.copy(alpha = 0.6f)
+        else -> GlowColor.copy(alpha = pa)
+    }
+    val bg by animateColorAsState(
+        if (s.searchOpen) Color(0xFF1A2333) else Color(0xFF2F6FE4),
+        tween(300),
+        label = "bg"
+    )
+
+    BoxWithConstraints(Modifier.fillMaxWidth().height(h)) {
+        val col = (maxWidth - gap * 2) / 3
+        val edge = (col - keySize) / 2
+        val target = if (s.searchOpen) maxWidth - edge * 2 else h
+        val w by animateDpAsState(target, tween(350, easing = FastOutSlowInEasing), label = "w")
+        val shape = RoundedCornerShape(h / 2)
+
+        Row(
+            Modifier
+                .offset(x = edge)
+                .width(w)
+                .height(h)
+                .shadow(6.dp, shape)
+                .clip(shape)
+                .background(bg)
+                .border(1.5.dp, borderColor, shape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = !s.searchOpen
+                ) {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    s.openSearchUi()
+                },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(h), contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = "Išči",
+                    modifier = Modifier.size(26.dp * k),
+                    tint = if (s.searchOpen) ArrowLit else Color.White
+                )
+            }
+            if (s.searchOpen) {
+                Column(Modifier.weight(1f)) {
+                    BasicTextField(
+                        value = s.searchText,
+                        onValueChange = { s.onSearchChange(it) },
+                        singleLine = true,
+                        textStyle = TextStyle(color = TextColor, fontSize = (17 * k).sp),
+                        cursorBrush = SolidColor(ArrowLit),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        decorationBox = { inner ->
+                            Box {
+                                if (s.searchText.isEmpty()) {
+                                    Text("Išči na TV", color = DimColor, fontSize = (17 * k).sp)
+                                }
+                                inner()
+                            }
+                        }
+                    )
+                    Text(
+                        if (s.searchReady) "Pripravljeno, tipkaj" else "Odpiram iskanje na TV…",
+                        color = if (s.searchReady) GreenColor else DimColor,
+                        fontSize = (10 * k).sp
+                    )
+                }
+                Box(
+                    Modifier
+                        .size(h)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { s.closeSearch() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = "Zapri", tint = DimColor)
+                }
+            }
+        }
+    }
+}
+
+// ---------- daljinec ----------
 
 @Composable
 fun RemoteScreen(s: AppState) {
-    var testCode by remember { mutableStateOf("") }
-    val gap = Arrangement.spacedBy(8.dp)
-    val focusManager = LocalFocusManager.current
+    BoxWithConstraints(Modifier.fillMaxSize().background(ScreenColor)) {
+        val k = minOf(maxHeight / 840.dp, maxWidth / 360.dp).coerceIn(0.7f, 1.2f)
+        val key = 58.dp * k
+        val big = 62.dp * k
+        val small = 52.dp * k
+        val gap = 6.dp
+        val vgap = 12.dp * k
 
-    LaunchedEffect(s.focusReset) {
-        focusManager.clearFocus()
-    }
+        Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
+            StatusBar(s)
+            Spacer(Modifier.height(4.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(BodyBrush)
+                    .padding(horizontal = 14.dp, vertical = 16.dp * k),
+                verticalArrangement = Arrangement.spacedBy(vgap)
+            ) {
+                SearchBar(s, key, gap, k)
 
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (s.connected) "●" else "○",
-                color = if (s.connected) GreenColor else DimColor,
-                fontSize = 13.sp
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                if (s.connected) "Povezano  ·  Program ${s.channel}" else s.status.ifEmpty { "Povezujem…" },
-                Modifier.weight(1f),
-                fontSize = 13.sp
-            )
-            IconButton(onClick = { s.showSettings = true }) {
-                Icon(Icons.Filled.Settings, contentDescription = "Nastavitve", tint = DimColor)
-            }
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = s.searchText,
-                onValueChange = { s.onSearchChange(it) },
-                placeholder = { Text("Išči na TV (tipkaj)") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier
-                    .weight(1f)
-                    .onFocusChanged { if (it.isFocused) s.prepareSearch() }
-            )
-            FilledTonalButton(
-                onClick = { s.onSearchChange("") },
-                enabled = s.searchText.isNotEmpty()
-            ) { Text("Briši") }
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = testCode,
-                onValueChange = { testCode = it.filter { c -> c.isDigit() }.take(3) },
-                placeholder = { Text("Test koda") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
-            FilledTonalButton(onClick = { testCode.toIntOrNull()?.let { s.key(it) } }) { Text("Pošlji") }
-        }
-
-        Column(Modifier.weight(4f).fillMaxWidth(), verticalArrangement = gap) {
-            listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9)).forEach { r ->
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
-                    r.forEach { n ->
-                        RBtn(n.toString(), Modifier.weight(1f).fillMaxHeight()) { s.digit(n) }
+                // številčnica
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp * k)) {
+                    listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9), listOf(-1, 0, -1)).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            row.forEach { n ->
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    if (n >= 0) {
+                                        RoundKey(key, onDown = { s.digit(n) }) {
+                                            Text(
+                                                "$n",
+                                                fontSize = (30 * k).sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = TextColor
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            }
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = gap) {
-                Spacer(Modifier.weight(1f))
-                RBtn("0", Modifier.weight(1f).fillMaxHeight()) { s.digit(0) }
-                Spacer(Modifier.weight(1f))
-            }
-        }
 
-        Box(Modifier.weight(4.2f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            DPad(s, Modifier.fillMaxHeight())
-        }
+                // smerni krog
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    DPad(s, 206.dp * k, k)
+                }
 
-        Row(Modifier.weight(1.2f).fillMaxWidth(), horizontalArrangement = gap) {
-            IconLabelBtn(Icons.Filled.ArrowBack, "Nazaj", Modifier.weight(1f).fillMaxHeight()) { s.key(4) }
-            IconLabelBtn(Icons.Filled.Home, "Domov", Modifier.weight(1f).fillMaxHeight()) { s.key(3) }
-        }
+                // nazaj, domov
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        RoundKey(big, onDown = { s.press(4) }) { IconLabel(Icons.Filled.ArrowBack, "Nazaj", k) }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        RoundKey(big, onDown = { s.press(3) }) { IconLabel(Icons.Filled.Home, "Domov", k) }
+                    }
+                }
 
-        Row(Modifier.weight(2.2f).fillMaxWidth(), horizontalArrangement = gap) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = gap) {
-                RBtn("🔊", Modifier.weight(1f).fillMaxWidth(), 20) { s.key(24) }
-                RBtn("🔉", Modifier.weight(1f).fillMaxWidth(), 20) { s.key(25) }
-            }
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                FilledTonalButton(
-                    onClick = { s.key(164) },
-                    modifier = Modifier.size(64.dp),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp)
-                ) { Text("🔇", fontSize = 20.sp) }
-            }
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = gap) {
-                RBtn("P ▲", Modifier.weight(1f).fillMaxWidth(), 18) { s.channelStep(1) }
-                RBtn("P ▼", Modifier.weight(1f).fillMaxWidth(), 18) { s.channelStep(-1) }
+                // glasnost, utišaj, program
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                    ) {
+                        RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
+                            Text("+", fontSize = (28 * k).sp, color = TextColor)
+                        }
+                        RoundKey(small, onDown = { s.keyDown(25) }, onUp = { s.keyUp(25) }) {
+                            Text("−", fontSize = (28 * k).sp, color = TextColor)
+                        }
+                    }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        RoundKey(big, onDown = { s.press(164) }) {
+                            Text("🔇", fontSize = (22 * k).sp)
+                        }
+                    }
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                    ) {
+                        RoundKey(small, onDown = { s.channelStep(1) }) {
+                            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Naslednji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
+                        }
+                        RoundKey(small, onDown = { s.channelStep(-1) }) {
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Prejšnji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    Text("Glasnost", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
+                    Spacer(Modifier.weight(1f))
+                    Text("Program", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
+                }
             }
         }
     }
