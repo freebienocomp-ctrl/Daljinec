@@ -698,7 +698,9 @@ class AppState(private val ctx: Context) {
     private fun openSearchIfNeeded() {
         if (kbOpen) return
         step(3, homeWait.toLong())     // Domov, počakaj, da se naloži
-        step(21, screenWait.toLong())  // levo -> lupa, odpre iskanje
+        step(21)                       // levo -> lupa
+        step(21)                       // levo (zavarovanje)
+        step(21, screenWait.toLong())  // levo (zavarovanje), odpre iskanje
         step(20)                       // dol -> mikrofon
         step(20)                       // dol -> A
         kr = 1
