@@ -473,7 +473,7 @@ val EON_ROWS = listOf(
     "Ž:;.,-"
 )
 
-/** Vrne (vrstica, stolpec) za znak, -1 za presledek ali null, če znaka ni. */
+/** Vrne (vrstica, stolpec) za znak, (-1, -1) za presledek ali null, če znaka ni. */
 fun eonPos(ch: Char): Pair<Int, Int>? {
     val c = when (val u = ch.uppercaseChar()) {
         'Ć' -> 'Č'
@@ -502,10 +502,11 @@ class AppState(private val ctx: Context) {
     var connected by mutableStateOf(false)
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
-    var searching by mutableStateOf(false)
     var channel by mutableStateOf(prefs.getInt("channel", 1))
     var channelList by mutableStateOf(prefs.getString("chlist", "") ?: "")
+    var stepDelay by mutableStateOf(prefs.getInt("step", 80))
     var showSettings by mutableStateOf(false)
+    var searchText by mutableStateOf("")
     val found = mutableStateListOf<Pair<String, String>>()
 
     private var pairing: Pairing? = null
@@ -514,6 +515,11 @@ class AppState(private val ctx: Context) {
     private var running = false
     private var entry = ""
     private var lastDigit = 0L
+
+    // položaj na EON tipkovnici (uporablja samo nit "keys")
+    private var kbOpen = false
+    private var kr = 1
+    private var kc = 0
 
     fun addFound(name: String, ip: String) {
         if (ip.isEmpty() || ip.contains(':')) return
@@ -592,8 +598,15 @@ class AppState(private val ctx: Context) {
         connected = false
     }
 
+    /** Gumb na daljincu: konča iskanje in pošlje tipko. */
     fun key(code: Int) {
+        endSearch()
         keys.execute { remote?.key(code) }
+    }
+
+    private fun endSearch() {
+        searchText = ""
+        keys.execute { kbOpen = false }
     }
 
     private fun saveChannel(c: Int) {
@@ -604,6 +617,11 @@ class AppState(private val ctx: Context) {
     fun saveChannelList(t: String) {
         channelList = t
         prefs.edit().putString("chlist", t).apply()
+    }
+
+    fun saveStepDelay(ms: Int) {
+        stepDelay = ms
+        prefs.edit().putInt("step", ms).apply()
     }
 
     /** Številka s številčnice: pošlje tipko in si zapomni program. */
@@ -625,6 +643,7 @@ class AppState(private val ctx: Context) {
         }
         saveChannel(c)
         entry = ""
+        endSearch()
         keys.execute {
             for (ch in c.toString()) {
                 remote?.key(7 + (ch - '0'))
@@ -635,47 +654,68 @@ class AppState(private val ctx: Context) {
         }
     }
 
-    /** Odpre EON iskanje (Domov, levo) in vtipka besedilo po EON tipkovnici. */
-    fun searchOnTv(text: String) {
-        val targets = text.mapNotNull { eonPos(it) }
-        if (targets.isEmpty()) return
-        searching = true
-        keys.execute {
-            fun k(code: Int, wait: Long = 160) {
-                remote?.key(code)
-                Thread.sleep(wait)
+    // ---------- sprotno tipkanje na EON tipkovnici ----------
+
+    /** Klic ob vsaki spremembi besedila v polju "Išči na TV". */
+    fun onSearchChange(n: String) {
+        val old = searchText
+        searchText = n
+        var common = 0
+        while (common < old.length && common < n.length && old[common] == n[common]) common++
+        val delCount = old.substring(common).count { eonPos(it) != null }
+        val add = n.substring(common).mapNotNull { eonPos(it) }
+        if (delCount == 0 && add.isEmpty()) return
+        keys.execute { typeOnTv(delCount, add) }
+    }
+
+    private fun step(code: Int, wait: Long = stepDelay.toLong()) {
+        remote?.key(code)
+        Thread.sleep(wait)
+    }
+
+    private fun moveTo(tr: Int, tc: Int) {
+        while (kr < tr) { step(20); kr++ }
+        while (kr > tr) { step(19); kr-- }
+        while (kc < tc) { step(22); kc++ }
+        while (kc > tc) { step(21); kc-- }
+    }
+
+    private fun typeOnTv(del: Int, add: List<Pair<Int, Int>>) {
+        val press = stepDelay * 2L
+        if (!kbOpen) {
+            if (add.isEmpty()) return
+            step(3, 1800)   // Domov
+            step(21, 1200)  // levo -> lupa, odpre iskanje
+            step(20, 400)   // dol -> mikrofon
+            step(20, 400)   // dol -> A
+            kr = 1
+            kc = 0
+            kbOpen = true
+        }
+        if (del > 0) {
+            // briši: nad E je tipka za brisanje
+            moveTo(1, 5)
+            step(19, 250)
+            repeat(del) { step(23, press) }
+            step(20, 250)
+            repeat(5) { step(21) }
+            kr = 1
+            kc = 0
+        }
+        for ((tr, tc) in add) {
+            if (tr == -1) {
+                // presledek: z vrstice Ž, stolpec 2, en korak dol
+                moveTo(5, 2)
+                step(20)
+                step(23, press)
+                step(19)
+                repeat(5) { step(21) }
+                kr = 5
+                kc = 0
+                continue
             }
-            try {
-                k(3, 1800)   // Domov
-                k(21, 1200)  // levo -> lupa, odpre iskanje
-                k(20, 400)   // dol -> mikrofon
-                k(20, 400)   // dol -> A
-                var r = 1
-                var c = 0
-                for ((tr, tc) in targets) {
-                    if (tr == -1) {
-                        // presledek: na vrstico 5, stolpec 2, nato dol
-                        while (r < 5) { k(20); r++ }
-                        while (c < 2) { k(22); c++ }
-                        while (c > 2) { k(21); c-- }
-                        k(20)
-                        k(23, 300)
-                        // nazaj gor in na začetek vrstice (Ž)
-                        k(19)
-                        repeat(5) { k(21) }
-                        r = 5
-                        c = 0
-                        continue
-                    }
-                    while (r < tr) { k(20); r++ }
-                    while (r > tr) { k(19); r-- }
-                    while (c < tc) { k(22); c++ }
-                    while (c > tc) { k(21); c-- }
-                    k(23, 300)
-                }
-            } finally {
-                searching = false
-            }
+            moveTo(tr, tc)
+            step(23, press)
         }
     }
 }
@@ -785,6 +825,7 @@ fun SetupScreen(s: AppState) {
 @Composable
 fun SettingsScreen(s: AppState) {
     var list by remember { mutableStateOf(s.channelList) }
+    var stepText by remember { mutableStateOf(s.stepDelay.toString()) }
     val count = parseChannels(list).size
 
     Column(
@@ -800,9 +841,18 @@ fun SettingsScreen(s: AppState) {
             modifier = Modifier.fillMaxWidth()
         )
         Text(if (count == 0) "Seznam je prazen (vsi programi po vrsti)." else "Prepoznanih programov: $count")
+        OutlinedTextField(
+            value = stepText,
+            onValueChange = { stepText = it.filter { c -> c.isDigit() }.take(4) },
+            label = { Text("Premor med koraki pri iskanju (ms)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Manjše število = hitrejše tipkanje. Če črke manjkajo, ga povečaj (privzeto 80).", color = DimColor, fontSize = 13.sp)
         Button(
             onClick = {
                 s.saveChannelList(list)
+                s.saveStepDelay((stepText.toIntOrNull() ?: 80).coerceIn(30, 1000))
                 s.showSettings = false
             },
             modifier = Modifier.fillMaxWidth()
@@ -902,7 +952,6 @@ fun DPad(s: AppState, modifier: Modifier) {
 
 @Composable
 fun RemoteScreen(s: AppState) {
-    var text by remember { mutableStateOf("") }
     var testCode by remember { mutableStateOf("") }
     val gap = Arrangement.spacedBy(8.dp)
 
@@ -929,17 +978,17 @@ fun RemoteScreen(s: AppState) {
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("Išči na TV") },
+                value = s.searchText,
+                onValueChange = { s.onSearchChange(it) },
+                placeholder = { Text("Išči na TV (tipkaj)") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
             FilledTonalButton(
-                onClick = { s.searchOnTv(text) },
-                enabled = text.isNotBlank() && !s.searching
-            ) { Text(if (s.searching) "…" else "Išči") }
+                onClick = { s.onSearchChange("") },
+                enabled = s.searchText.isNotEmpty()
+            ) { Text("Briši") }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) {
