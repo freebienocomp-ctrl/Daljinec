@@ -508,6 +508,7 @@ class AppState(private val ctx: Context) {
     var channel by mutableStateOf(prefs.getInt("channel", 1))
     var channelList by mutableStateOf(prefs.getString("chlist", "") ?: "")
     var stepDelay by mutableStateOf(prefs.getInt("step", 80))
+    var homeWait by mutableStateOf(prefs.getInt("home", 500))
     var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
     var showSettings by mutableStateOf(false)
     var searchText by mutableStateOf("")
@@ -626,10 +627,11 @@ class AppState(private val ctx: Context) {
         prefs.edit().putString("chlist", t).apply()
     }
 
-    fun saveTimings(step: Int, screen: Int) {
+    fun saveTimings(step: Int, home: Int, screen: Int) {
         stepDelay = step
+        homeWait = home
         screenWait = screen
-        prefs.edit().putInt("step", step).putInt("screen", screen).apply()
+        prefs.edit().putInt("step", step).putInt("home", home).putInt("screen", screen).apply()
     }
 
     /** Številka s številčnice: pošlje tipko in si zapomni program. */
@@ -695,11 +697,10 @@ class AppState(private val ctx: Context) {
 
     private fun openSearchIfNeeded() {
         if (kbOpen) return
-        val small = maxOf(stepDelay * 2L, 150L)
-        step(3)                        // Domov
+        step(3, homeWait.toLong())     // Domov, počakaj, da se naloži
         step(21, screenWait.toLong())  // levo -> lupa, odpre iskanje
-        step(20, small)                // dol -> mikrofon
-        step(20, small)                // dol -> A
+        step(20)                       // dol -> mikrofon
+        step(20)                       // dol -> A
         kr = 1
         kc = 0
         kbOpen = true
@@ -852,6 +853,7 @@ fun SetupScreen(s: AppState) {
 fun SettingsScreen(s: AppState) {
     var list by remember { mutableStateOf(s.channelList) }
     var stepText by remember { mutableStateOf(s.stepDelay.toString()) }
+    var homeText by remember { mutableStateOf(s.homeWait.toString()) }
     var screenText by remember { mutableStateOf(s.screenWait.toString()) }
     val count = parseChannels(list).size
 
@@ -877,18 +879,27 @@ fun SettingsScreen(s: AppState) {
         )
         Text("Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.", color = DimColor, fontSize = 13.sp)
         OutlinedTextField(
+            value = homeText,
+            onValueChange = { homeText = it.filter { c -> c.isDigit() }.take(4) },
+            label = { Text("Čakanje po Domov (ms)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text("Koliko časa aplikacija počaka po Domov, preden pošlje ◀ (50–5000). Če iskanje ne odpre, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        OutlinedTextField(
             value = screenText,
             onValueChange = { screenText = it.filter { c -> c.isDigit() }.take(4) },
             label = { Text("Čakanje na odprtje iskanja (ms)") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Text("Koliko časa aplikacija počaka, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        Text("Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.", color = DimColor, fontSize = 13.sp)
         Button(
             onClick = {
                 s.saveChannelList(list)
                 s.saveTimings(
                     (stepText.toIntOrNull() ?: 80).coerceIn(5, 1000),
+                    (homeText.toIntOrNull() ?: 500).coerceIn(50, 5000),
                     (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000)
                 )
                 s.showSettings = false
