@@ -734,8 +734,8 @@ fun RemoteScreen(s: AppState) {
                 RBtn("Utišaj", Modifier.fillMaxWidth().height(56.dp)) { s.key(164) }
             }
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = gap) {
-                RBtn("Prog ▲", Modifier.weight(1f).fillMaxWidth()) { s.key(166) }
-                RBtn("Prog ▼", Modifier.weight(1f).fillMaxWidth()) { s.key(167) }
+                RBtn("Prog ▲", Modifier.weight(1f).fillMaxWidth()) { s.key(92) }
+                RBtn("Prog ▼", Modifier.weight(1f).fillMaxWidth()) { s.key(93) }
             }
         }
     }
