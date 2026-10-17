@@ -6,8 +6,13 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.HapticFeedbackConstants
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.animateColorAsState
@@ -20,6 +25,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
@@ -59,7 +66,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -120,6 +131,28 @@ val ArrowColor = Color(0xFFC8CCD2)
 val ArrowLit = Color(0xFF93C5FD)
 val BodyBrush = Brush.verticalGradient(listOf(Color(0xFF0C0E10), Color(0xFF060708)))
 val KeyBrush = Brush.verticalGradient(listOf(Color(0xFF2C3138), Color(0xFF22262C)))
+val PowerBrush = Brush.verticalGradient(listOf(Color(0xFFE5484D), Color(0xFFB4232A)))
+
+// ---------- vibriranje (neodvisno od nastavitve tipkovnice) ----------
+
+object Haptics {
+    var enabled = true
+
+    fun tick(view: View) {
+        if (!enabled) return
+        try {
+            val ctx = view.context
+            val vib: Vibrator = if (Build.VERSION.SDK_INT >= 31) {
+                ctx.getSystemService(VibratorManager::class.java).defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            val amp = if (vib.hasAmplitudeControl()) 140 else VibrationEffect.DEFAULT_AMPLITUDE
+            vib.vibrate(VibrationEffect.createOneShot(18, amp))
+        } catch (_: Exception) {}
+    }
+}
 
 // ---------- minimalni protobuf ----------
 
@@ -556,7 +589,18 @@ class AppState(private val ctx: Context) {
     var searchOpen by mutableStateOf(false)
     var searchReady by mutableStateOf(false)
     var ledTick by mutableStateOf(0)
+    var vibrate by mutableStateOf(prefs.getBoolean("vib", true))
     val found = mutableStateListOf<Pair<String, String>>()
+
+    init {
+        Haptics.enabled = vibrate
+    }
+
+    fun saveVibrate(on: Boolean) {
+        vibrate = on
+        Haptics.enabled = on
+        prefs.edit().putBoolean("vib", on).apply()
+    }
 
     private var pairing: Pairing? = null
     private var remote: RemoteConnection? = null
@@ -980,6 +1024,10 @@ fun SettingsScreen(s: AppState) {
             modifier = Modifier.fillMaxWidth()
         )
         Text("Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Vibriranje ob pritisku", Modifier.weight(1f))
+            Switch(checked = s.vibrate, onCheckedChange = { s.saveVibrate(it) })
+        }
         Button(
             onClick = {
                 s.saveChannelList(list)
@@ -1037,6 +1085,7 @@ fun RoundKey(
     diameter: Dp,
     onDown: () -> Unit,
     onUp: () -> Unit = {},
+    brush: Brush = KeyBrush,
     content: @Composable BoxScope.() -> Unit
 ) {
     val view = LocalView.current
@@ -1060,7 +1109,7 @@ fun RoundKey(
             }
             .shadow(6.dp, CircleShape)
             .clip(CircleShape)
-            .background(KeyBrush)
+            .background(brush)
             .border(1.5.dp, GlowColor.copy(alpha = 0.8f * glow.value), CircleShape)
             .pointerInput(Unit) {
                 val hw = size.width / 2f
@@ -1068,7 +1117,7 @@ fun RoundKey(
                 detectTapGestures(onPress = { o ->
                     val nx = ((o.x - hw) / hw).coerceIn(-1f, 1f)
                     val ny = ((o.y - hh) / hh).coerceIn(-1f, 1f)
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    Haptics.tick(view)
                     down()
                     scope.launch { rx.animateTo(-ny * 16f, tween(70)) }
                     scope.launch { ry.animateTo(nx * 16f, tween(70)) }
@@ -1085,6 +1134,31 @@ fun RoundKey(
         contentAlignment = Alignment.Center,
         content = content
     )
+}
+
+/** Simbol za vklop: krog z odprtino zgoraj in navpično črto. */
+@Composable
+fun PowerIcon(size: Dp) {
+    Canvas(Modifier.size(size)) {
+        val sw = this.size.width * 0.12f
+        val pad = sw
+        drawArc(
+            color = Color.White,
+            startAngle = -60f,
+            sweepAngle = 300f,
+            useCenter = false,
+            topLeft = Offset(pad, pad),
+            size = Size(this.size.width - 2 * pad, this.size.height - 2 * pad),
+            style = Stroke(width = sw, cap = StrokeCap.Round)
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(center.x, pad * 0.4f),
+            end = Offset(center.x, center.y),
+            strokeWidth = sw,
+            cap = StrokeCap.Round
+        )
+    }
 }
 
 @Composable
@@ -1131,7 +1205,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                 detectTapGestures(onPress = { o ->
                     val dx = o.x - c
                     val dy = o.y - c
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    Haptics.tick(view)
                     if (hypot(dx, dy) < c * 0.37f) {
                         s.press(23)
                         scope.launch { okScale.animateTo(0.92f, tween(70)) }
@@ -1250,16 +1324,23 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
 
     LaunchedEffect(s.searchOpen) {
         if (s.searchOpen) {
+            focused = false
             // počakaj, da se polje razširi, nato poskušaj, dokler polje ne dobi fokusa
             delay(380)
             var tries = 0
-            while (!focused && tries < 20) {
+            while (!focused && tries < 30) {
                 try { focus.requestFocus() } catch (_: Exception) {}
                 delay(50)
                 tries++
             }
+            // tipkovnico odpri na dva načina, za vsak primer
             kb?.show()
+            try {
+                val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(view, 0)
+            } catch (_: Exception) {}
         } else {
+            focused = false
             fm.clearFocus()
             kb?.hide()
         }
@@ -1290,6 +1371,15 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
         val w by animateDpAsState(target, tween(350, easing = FastOutSlowInEasing), label = "w")
         val shape = RoundedCornerShape(h / 2)
 
+        // tipka za vklop/izklop, poravnana z desnim robom tipke 3
+        if (!s.searchOpen) {
+            Box(Modifier.offset(x = maxWidth - edge - h)) {
+                RoundKey(h, onDown = { s.press(26) }, brush = PowerBrush) {
+                    PowerIcon(22.dp * k)
+                }
+            }
+        }
+
         Row(
             Modifier
                 .offset(x = edge)
@@ -1304,7 +1394,7 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
                     indication = null,
                     enabled = !s.searchOpen
                 ) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    Haptics.tick(view)
                     s.openSearchUi()
                 },
             verticalAlignment = Alignment.CenterVertically
