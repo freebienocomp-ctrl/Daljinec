@@ -14,6 +14,9 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -585,6 +588,7 @@ class AppState(private val ctx: Context) {
     var homeWait by mutableStateOf(prefs.getInt("home", 500))
     var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
     var showSettings by mutableStateOf(false)
+    var showSetup by mutableStateOf(false)
     var searchText by mutableStateOf("")
     var searchOpen by mutableStateOf(false)
     var searchReady by mutableStateOf(false)
@@ -646,6 +650,7 @@ class AppState(private val ctx: Context) {
                 prefs.edit().putString("host", host).putBoolean("paired", true).apply()
                 waitingCode = false
                 paired = true
+                showSetup = false
                 status = ""
                 connect()
             } catch (e: Exception) {
@@ -661,6 +666,7 @@ class AppState(private val ctx: Context) {
         paired = false
         waitingCode = false
         status = ""
+        showSetup = true
     }
 
     fun connect() {
@@ -879,8 +885,12 @@ class MainActivity : ComponentActivity() {
     private lateinit var state: AppState
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         super.onCreate(savedInstanceState)
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         state = AppState(applicationContext)
         setContent {
             MaterialTheme(
@@ -912,7 +922,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App(s: AppState) {
     when {
-        !s.paired -> SetupScreen(s)
+        s.showSetup -> SetupScreen(s)
         s.showSettings -> SettingsScreen(s)
         else -> RemoteScreen(s)
     }
@@ -925,6 +935,8 @@ fun SetupScreen(s: AppState) {
     val ctx = LocalContext.current
     var code by remember { mutableStateOf("") }
 
+    BackHandler { s.showSetup = false }
+
     DisposableEffect(Unit) {
         val d = Discovery(ctx) { name, ip -> s.addFound(name, ip) }
         d.start()
@@ -932,7 +944,11 @@ fun SetupScreen(s: AppState) {
     }
 
     Column(
-        Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Povezava z EON boxom", style = MaterialTheme.typography.titleLarge)
@@ -973,6 +989,10 @@ fun SetupScreen(s: AppState) {
             ) { Text("Potrdi kodo") }
         }
         if (s.status.isNotEmpty()) Text(s.status)
+        OutlinedButton(
+            onClick = { s.showSetup = false },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Nazaj") }
     }
 }
 
@@ -987,8 +1007,14 @@ fun SettingsScreen(s: AppState) {
     var testCode by remember { mutableStateOf("") }
     val count = parseChannels(list).size
 
+    BackHandler { s.showSettings = false }
+
     Column(
-        Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Nastavitve", style = MaterialTheme.typography.titleLarge)
@@ -1073,7 +1099,7 @@ fun SettingsScreen(s: AppState) {
                 s.resetPairing()
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Ponovno upari box") }
+        ) { Text(if (s.paired) "Ponovno upari box" else "Upari box") }
     }
 }
 
@@ -1162,9 +1188,9 @@ fun PowerIcon(size: Dp) {
 }
 
 @Composable
-fun IconLabel(icon: ImageVector, label: String, k: Float) {
+fun IconLabel(icon: ImageVector, label: String, k: Float, tint: Color = TextColor) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp * k), tint = TextColor)
+        Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp * k), tint = tint)
         Text(label, fontSize = (11 * k).sp, color = LabelColor)
     }
 }
@@ -1292,58 +1318,64 @@ fun StatusBar(s: AppState) {
                 .background(lerp(Color(0xFF2A2F36), Color(0xFFFF4D4D), v))
         )
         Spacer(Modifier.width(8.dp))
-        Text(
-            if (s.connected) "●" else "○",
-            color = if (s.connected) GreenColor else DimColor,
-            fontSize = 12.sp
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            if (s.connected) "Povezano  ·  Program ${s.channel}" else s.status.ifEmpty { "Povezujem…" },
-            Modifier.weight(1f),
-            fontSize = 12.sp,
-            color = LabelColor
-        )
+        if (!s.paired) {
+            Text(
+                "Box ni uparjen  ·  Poveži",
+                Modifier
+                    .weight(1f)
+                    .clickable { s.showSetup = true },
+                fontSize = 12.sp,
+                color = ArrowLit
+            )
+        } else {
+            Text(
+                if (s.connected) "●" else "○",
+                color = if (s.connected) GreenColor else DimColor,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (s.connected) "Povezano  ·  Program ${s.channel}" else s.status.ifEmpty { "Povezujem…" },
+                Modifier.weight(1f),
+                fontSize = 12.sp,
+                color = LabelColor
+            )
+        }
         IconButton(onClick = { s.showSettings = true }) {
             Icon(Icons.Filled.Settings, contentDescription = "Nastavitve", tint = DimColor)
         }
     }
 }
 
-/** Modra lupa, ki se ob tapu razširi v iskalno polje do robov tipk 1 in 3. */
-@OptIn(ExperimentalComposeUiApi::class)
+/** Iskalno polje, prilepljeno nad telefonsko tipkovnico. */
 @Composable
-fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
-    val h = 48.dp * k
+fun SearchDock(s: AppState, modifier: Modifier) {
     val view = LocalView.current
     val focus = remember { FocusRequester() }
     val kb = LocalSoftwareKeyboardController.current
-    val fm = LocalFocusManager.current
-
     var focused by remember { mutableStateOf(false) }
 
-    LaunchedEffect(s.searchOpen) {
-        if (s.searchOpen) {
-            focused = false
-            // počakaj, da se polje razširi, nato poskušaj, dokler polje ne dobi fokusa
-            delay(380)
-            var tries = 0
-            while (!focused && tries < 30) {
-                try { focus.requestFocus() } catch (_: Exception) {}
-                delay(50)
-                tries++
-            }
-            // tipkovnico odpri na dva načina, za vsak primer
-            kb?.show()
-            try {
-                val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.showSoftInput(view, 0)
-            } catch (_: Exception) {}
-        } else {
-            focused = false
-            fm.clearFocus()
-            kb?.hide()
+    fun grab() {
+        try { focus.requestFocus() } catch (_: Exception) {}
+        kb?.show()
+        try {
+            val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(view, 0)
+        } catch (_: Exception) {}
+    }
+
+    // takoj ob odprtju: poskušaj, dokler polje ne dobi kazalca
+    LaunchedEffect(Unit) {
+        var tries = 0
+        while (!focused && tries < 40) {
+            delay(50)
+            try { focus.requestFocus() } catch (_: Exception) {}
+            tries++
         }
+        kb?.show()
+    }
+    DisposableEffect(Unit) {
+        onDispose { kb?.hide() }
     }
 
     val pulse = rememberInfiniteTransition(label = "pulse")
@@ -1353,99 +1385,70 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
         animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
         label = "pa"
     )
-    val borderColor = when {
-        !s.searchOpen -> Color.Transparent
-        s.searchReady -> GreenColor.copy(alpha = 0.6f)
-        else -> GlowColor.copy(alpha = pa)
-    }
-    val bg by animateColorAsState(
-        if (s.searchOpen) Color(0xFF1A2333) else Color(0xFF2F6FE4),
-        tween(300),
-        label = "bg"
-    )
+    val borderColor = if (s.searchReady) GreenColor.copy(alpha = 0.6f) else GlowColor.copy(alpha = pa)
+    val shape = RoundedCornerShape(29.dp)
 
-    BoxWithConstraints(Modifier.fillMaxWidth().height(h)) {
-        val col = (maxWidth - gap * 2) / 3
-        val edge = (col - keySize) / 2
-        val target = if (s.searchOpen) maxWidth - edge * 2 else h
-        val w by animateDpAsState(target, tween(350, easing = FastOutSlowInEasing), label = "w")
-        val shape = RoundedCornerShape(h / 2)
-
-        // tipka za vklop/izklop, poravnana z desnim robom tipke 3
-        if (!s.searchOpen) {
-            Box(Modifier.offset(x = maxWidth - edge - h)) {
-                RoundKey(h, onDown = { s.press(26) }, brush = PowerBrush) {
-                    PowerIcon(22.dp * k)
-                }
-            }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .shadow(14.dp, shape)
+            .clip(shape)
+            .background(Color(0xFF1A2333))
+            .border(1.5.dp, borderColor, shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { grab() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(26.dp), tint = GlowColor)
         }
-
-        Row(
+        Column(Modifier.weight(1f)) {
+            BasicTextField(
+                value = s.searchText,
+                onValueChange = { s.onSearchChange(it) },
+                singleLine = true,
+                textStyle = TextStyle(color = TextColor, fontSize = 17.sp),
+                cursorBrush = SolidColor(ArrowLit),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focus)
+                    .onFocusChanged { focused = it.isFocused },
+                decorationBox = { inner ->
+                    Box {
+                        if (s.searchText.isEmpty()) {
+                            Text("Išči na TV", color = DimColor, fontSize = 17.sp)
+                        }
+                        inner()
+                    }
+                }
+            )
+            Text(
+                when {
+                    !focused -> "Tapni sem za tipkanje"
+                    s.searchReady -> "Pripravljeno, tipkaj"
+                    else -> "Odpiram iskanje na TV…"
+                },
+                color = when {
+                    !focused -> Color(0xFFFBBF24)
+                    s.searchReady -> GreenColor
+                    else -> DimColor
+                },
+                fontSize = 10.sp
+            )
+        }
+        Box(
             Modifier
-                .offset(x = edge)
-                .width(w)
-                .height(h)
-                .shadow(6.dp, shape)
-                .clip(shape)
-                .background(bg)
-                .border(1.5.dp, borderColor, shape)
+                .size(58.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    enabled = !s.searchOpen
-                ) {
-                    Haptics.tick(view)
-                    s.openSearchUi()
-                },
-            verticalAlignment = Alignment.CenterVertically
+                    indication = null
+                ) { s.closeSearch() },
+            contentAlignment = Alignment.Center
         ) {
-            Box(Modifier.size(h), contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Filled.Search,
-                    contentDescription = "Išči",
-                    modifier = Modifier.size(26.dp * k),
-                    tint = if (s.searchOpen) ArrowLit else Color.White
-                )
-            }
-            if (s.searchOpen) {
-                Column(Modifier.weight(1f)) {
-                    BasicTextField(
-                        value = s.searchText,
-                        onValueChange = { s.onSearchChange(it) },
-                        singleLine = true,
-                        textStyle = TextStyle(color = TextColor, fontSize = (17 * k).sp),
-                        cursorBrush = SolidColor(ArrowLit),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focus)
-                            .onFocusChanged { focused = it.isFocused },
-                        decorationBox = { inner ->
-                            Box {
-                                if (s.searchText.isEmpty()) {
-                                    Text("Išči na TV", color = DimColor, fontSize = (17 * k).sp)
-                                }
-                                inner()
-                            }
-                        }
-                    )
-                    Text(
-                        if (s.searchReady) "Pripravljeno, tipkaj" else "Odpiram iskanje na TV…",
-                        color = if (s.searchReady) GreenColor else DimColor,
-                        fontSize = (10 * k).sp
-                    )
-                }
-                Box(
-                    Modifier
-                        .size(h)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { s.closeSearch() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.Close, contentDescription = "Zapri", tint = DimColor)
-                }
-            }
+            Icon(Icons.Filled.Close, contentDescription = "Zapri", tint = DimColor)
         }
     }
 }
@@ -1454,107 +1457,135 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
 
 @Composable
 fun RemoteScreen(s: AppState) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(ScreenColor)) {
-        val k = minOf(maxHeight / 840.dp, maxWidth / 360.dp).coerceIn(0.7f, 1.2f)
-        val key = 58.dp * k
-        val big = 62.dp * k
-        val small = 52.dp * k
-        val gap = 6.dp
-        val vgap = 12.dp * k
+    BackHandler(enabled = s.searchOpen) { s.closeSearch() }
 
-        Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
-            StatusBar(s)
-            Spacer(Modifier.height(4.dp))
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(BodyBrush)
-                    .padding(horizontal = 14.dp, vertical = 16.dp * k),
-                verticalArrangement = Arrangement.spacedBy(vgap)
-            ) {
-                SearchBar(s, key, gap, k)
+    Box(Modifier.fillMaxSize().background(ScreenColor)) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+        ) {
+            val k = minOf(maxHeight / 840.dp, maxWidth / 360.dp).coerceIn(0.7f, 1.2f)
+            val key = 58.dp * k
+            val big = 62.dp * k
+            val small = 52.dp * k
+            val gap = 6.dp
+            val vgap = 12.dp * k
 
-                // številčnica
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp * k)) {
-                    listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9), listOf(-1, 0, -1)).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            row.forEach { n ->
-                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                    if (n >= 0) {
-                                        RoundKey(key, onDown = { s.digit(n) }) {
-                                            Text(
-                                                "$n",
-                                                fontSize = (30 * k).sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = TextColor
-                                            )
+            Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                StatusBar(s)
+                Spacer(Modifier.height(4.dp))
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(BodyBrush)
+                        .padding(horizontal = 14.dp, vertical = 16.dp * k),
+                    verticalArrangement = Arrangement.spacedBy(vgap)
+                ) {
+                    // vklop/izklop
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        RoundKey(48.dp * k, onDown = { s.press(26) }, brush = PowerBrush) {
+                            PowerIcon(22.dp * k)
+                        }
+                    }
+
+                    // številčnica
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp * k)) {
+                        listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9), listOf(-1, 0, -1)).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                                row.forEach { n ->
+                                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                        if (n >= 0) {
+                                            RoundKey(key, onDown = { s.digit(n) }) {
+                                                Text(
+                                                    "$n",
+                                                    fontSize = (30 * k).sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = TextColor
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // smerni krog
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    DPad(s, 206.dp * k, k)
-                }
-
-                // nazaj, domov
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        RoundKey(big, onDown = { s.press(4) }) { IconLabel(Icons.Filled.ArrowBack, "Nazaj", k) }
+                    // smerni krog
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        DPad(s, 206.dp * k, k)
                     }
-                    Spacer(Modifier.weight(1f))
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        RoundKey(big, onDown = { s.press(3) }) { IconLabel(Icons.Filled.Home, "Domov", k) }
-                    }
-                }
 
-                // glasnost, utišaj, program
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(gap),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                    // nazaj, domov, išči
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            RoundKey(big, onDown = { s.press(4) }) { IconLabel(Icons.Filled.ArrowBack, "Nazaj", k) }
+                        }
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            RoundKey(big, onDown = { s.press(3) }) { IconLabel(Icons.Filled.Home, "Domov", k) }
+                        }
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            RoundKey(big, onDown = { s.openSearchUi() }) {
+                                IconLabel(Icons.Filled.Search, "Išči", k, tint = GlowColor)
+                            }
+                        }
+                    }
+
+                    // glasnost, utišaj, program
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
-                            Text("+", fontSize = (28 * k).sp, color = TextColor)
+                        Column(
+                            Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                        ) {
+                            RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
+                                Text("+", fontSize = (28 * k).sp, color = TextColor)
+                            }
+                            RoundKey(small, onDown = { s.keyDown(25) }, onUp = { s.keyUp(25) }) {
+                                Text("−", fontSize = (28 * k).sp, color = TextColor)
+                            }
                         }
-                        RoundKey(small, onDown = { s.keyDown(25) }, onUp = { s.keyUp(25) }) {
-                            Text("−", fontSize = (28 * k).sp, color = TextColor)
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            RoundKey(big, onDown = { s.press(164) }) {
+                                Text("🔇", fontSize = (22 * k).sp)
+                            }
+                        }
+                        Column(
+                            Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                        ) {
+                            RoundKey(small, onDown = { s.channelStep(1) }) {
+                                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Naslednji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
+                            }
+                            RoundKey(small, onDown = { s.channelStep(-1) }) {
+                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Prejšnji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
+                            }
                         }
                     }
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        RoundKey(big, onDown = { s.press(164) }) {
-                            Text("🔇", fontSize = (22 * k).sp)
-                        }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        Text("Glasnost", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
+                        Spacer(Modifier.weight(1f))
+                        Text("Program", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
                     }
-                    Column(
-                        Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp * k)
-                    ) {
-                        RoundKey(small, onDown = { s.channelStep(1) }) {
-                            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Naslednji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
-                        }
-                        RoundKey(small, onDown = { s.channelStep(-1) }) {
-                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Prejšnji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
-                        }
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    Text("Glasnost", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
-                    Spacer(Modifier.weight(1f))
-                    Text("Program", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
                 }
             }
+        }
+
+        // iskalno polje nad tipkovnico (daljinec ostane pri miru)
+        if (s.searchOpen) {
+            SearchDock(
+                s,
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            )
         }
     }
 }
