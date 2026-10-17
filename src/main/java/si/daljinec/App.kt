@@ -58,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -668,6 +669,16 @@ class AppState(private val ctx: Context) {
         keys.execute { remote?.key(code, 2) }
     }
 
+    /** Preizkus: pošlje "pritisnjeno", počaka 150 ms in pošlje "spuščeno" (kot fizični daljinec). */
+    fun holdPress(code: Int) {
+        ledTick++
+        keys.execute {
+            remote?.key(code, 1)
+            Thread.sleep(150)
+            remote?.key(code, 2)
+        }
+    }
+
     private fun saveChannel(c: Int) {
         channel = c
         prefs.edit().putInt("channel", c).apply()
@@ -1002,6 +1013,10 @@ fun SettingsScreen(s: AppState) {
             )
             Button(onClick = { testCode.toIntOrNull()?.let { s.press(it) } }) { Text("Pošlji") }
         }
+        OutlinedButton(
+            onClick = { testCode.toIntOrNull()?.let { s.holdPress(it) } },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Pošlji (drži)") }
 
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
@@ -1231,10 +1246,18 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
     val kb = LocalSoftwareKeyboardController.current
     val fm = LocalFocusManager.current
 
+    var focused by remember { mutableStateOf(false) }
+
     LaunchedEffect(s.searchOpen) {
         if (s.searchOpen) {
-            delay(150)
-            try { focus.requestFocus() } catch (_: Exception) {}
+            // počakaj, da se polje razširi, nato poskušaj, dokler polje ne dobi fokusa
+            delay(380)
+            var tries = 0
+            while (!focused && tries < 20) {
+                try { focus.requestFocus() } catch (_: Exception) {}
+                delay(50)
+                tries++
+            }
             kb?.show()
         } else {
             fm.clearFocus()
@@ -1302,7 +1325,10 @@ fun SearchBar(s: AppState, keySize: Dp, gap: Dp, k: Float) {
                         singleLine = true,
                         textStyle = TextStyle(color = TextColor, fontSize = (17 * k).sp),
                         cursorBrush = SolidColor(ArrowLit),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focus)
+                            .onFocusChanged { focused = it.isFocused },
                         decorationBox = { inner ->
                             Box {
                                 if (s.searchText.isEmpty()) {
