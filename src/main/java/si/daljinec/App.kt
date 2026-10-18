@@ -1426,13 +1426,19 @@ class MainActivity : ComponentActivity() {
         if (web != null) return
         state.syncRunning = true
         best = emptyList()
-        val w = WebView(this)
+        // nevidni brskalnik čez cel zaslon (da se stran normalno izriše),
+        // dotike pa spusti naprej do daljinca
+        val w = object : WebView(this) {
+            override fun dispatchTouchEvent(event: android.view.MotionEvent?): Boolean = false
+        }
         web = w
         w.alpha = 0f
-        addContentView(w, ViewGroup.LayoutParams(1, 1))
+        w.isFocusable = false
+        addContentView(w, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         w.settings.javaScriptEnabled = true
         w.settings.domStorageEnabled = true
 
+        val acc = LinkedHashMap<Int, Ch>()
         var started = false
         var iter = 0
         var lastCount = -1
@@ -1448,11 +1454,20 @@ class MainActivity : ComponentActivity() {
                     more = json.optBoolean("more")
                     val arr = json.optJSONArray("list")
                     val list = if (arr != null) channelsFromJson(arr.toString()) else emptyList()
-                    if (list.size >= best.size) best = list
+                    // združi z že prebranimi (če stran nalaga po delih)
+                    for (c in list) {
+                        val old = acc[c.pos]
+                        acc[c.pos] = if (old == null) c else Ch(
+                            c.pos,
+                            old.name.ifBlank { c.name },
+                            old.logo.ifBlank { c.logo }
+                        )
+                    }
+                    best = acc.values.toList()
                 } catch (_: Exception) {}
                 if (!more && best.size == lastCount) stable++ else stable = 0
                 lastCount = best.size
-                if ((stable >= 2 && (best.isNotEmpty() || iter >= 10)) || iter >= 60) stopSync(best) else syncHandler.postDelayed(tick, 1500)
+                if ((stable >= 3 && (best.isNotEmpty() || iter >= 10)) || iter >= 80) stopSync(best) else syncHandler.postDelayed(tick, 2000)
             }
         }
         w.webViewClient = object : WebViewClient() {
@@ -1463,8 +1478,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        // varovalo: najdlje 2 minuti
-        syncHandler.postDelayed({ if (web === w) stopSync(best) }, 120_000)
+        // varovalo: najdlje 3 minute
+        syncHandler.postDelayed({ if (web === w) stopSync(best) }, 180_000)
         w.loadUrl("https://sl.eon.tv/programska-shema/")
     }
 }
@@ -1493,14 +1508,27 @@ private const val SYNC_JS = """
     if (l && !o.l) o.l = l;
     out[p] = o;
   }
-  var btn = null;
-  var els = document.querySelectorAll('button,a,span,div');
+  // gumb "Prikaži več": vzamemo najbolj notranji element s tem besedilom
+  // in kliknemo njegov pravi gumb (button/a), ne ovojnice okoli njega
+  var re = /^(prika[zž]i|poka[zž]i|nalo[zž]i)\s+(ve[cč]|vse)|^(show|load)\s+more/;
+  var hits = [];
+  var els = document.querySelectorAll('button,a,span,div,p,li,[role=button]');
   for (var i = 0; i < els.length; i++) {
-    var e = els[i];
-    if (e.children.length > 2) continue;
-    var tx = (e.textContent || '').trim().toLowerCase();
-    if (tx.length < 30 && (tx.indexOf('prikaži več') == 0 || tx.indexOf('prikazi vec') == 0 || tx.indexOf('prikaži vec') == 0) && e.offsetParent !== null) { btn = e; break; }
+    var tx = (els[i].textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (tx.length < 40 && re.test(tx)) hits.push(els[i]);
   }
+  var btn = null, spare = null;
+  for (var i = 0; i < hits.length; i++) {
+    var inner = true;
+    for (var j = 0; j < hits.length; j++) if (j != i && hits[i].contains(hits[j])) { inner = false; break; }
+    if (!inner) continue;
+    var tg = hits[i].closest('button,a,[role=button]') || hits[i];
+    if (tg.disabled) continue;
+    if (tg.getClientRects().length > 0) { btn = tg; break; }
+    if (!spare) spare = tg;
+  }
+  if (!btn) btn = spare;
+  window.scrollTo(0, document.body.scrollHeight);
   var tables = document.querySelectorAll('table');
   for (var b = 0; b < tables.length; b++) {
     var hs = tables[b].querySelectorAll('th'), ip = -1, ik = -1, il = -1;
@@ -1535,7 +1563,13 @@ private const val SYNC_JS = """
     put(mp ? parseInt(mp[1]) : 0, mk ? mk[1] : '', imgOf(el));
   }
   var list = Object.keys(out).map(function(k){ return out[k]; });
-  if (btn) btn.click();
+  if (btn) {
+    try { btn.scrollIntoView({ block: 'center' }); } catch (e) {}
+    var ev = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+    for (var i = 0; i < ev.length; i++) {
+      try { btn.dispatchEvent(new MouseEvent(ev[i], { bubbles: true, cancelable: true, view: window })); } catch (e) {}
+    }
+  }
   return JSON.stringify({ more: !!btn, list: list });
 })()
 """
