@@ -1098,7 +1098,7 @@ class AppState(private val ctx: Context) {
     }
 
     /** Ročni popravek: na katerem programu je box zdaj. */
-    fun setChannel(c: Int) {
+    fun saveChannel(c: Int) {
         channel = c
         prefs.edit().putInt("channel", c).apply()
     }
@@ -1128,7 +1128,7 @@ class AppState(private val ctx: Context) {
         val now = System.currentTimeMillis()
         entry = if (now - lastDigit < 2000 && entry.length < 4) entry + n else n.toString()
         lastDigit = now
-        entry.toIntOrNull()?.let { if (it > 0) setChannel(it) }
+        entry.toIntOrNull()?.let { if (it > 0) saveChannel(it) }
         press(7 + n)
     }
 
@@ -1140,7 +1140,7 @@ class AppState(private val ctx: Context) {
             d > 0 -> list.firstOrNull { it > channel } ?: list.first()
             else -> list.lastOrNull { it < channel } ?: list.last()
         }
-        setChannel(c)
+        saveChannel(c)
         entry = ""
         closeSearch()
         ledTick++
@@ -2099,7 +2099,7 @@ fun ChannelDialog(s: AppState) {
         },
         confirmButton = {
             Button(onClick = {
-                text.toIntOrNull()?.let { if (it > 0) s.setChannel(it) }
+                text.toIntOrNull()?.let { if (it > 0) s.saveChannel(it) }
                 s.showChannelDialog = false
             }) { Text(t.ok) }
         },
