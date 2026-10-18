@@ -13,6 +13,9 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
@@ -41,6 +44,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -52,6 +56,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -87,6 +92,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -178,10 +184,15 @@ class Tr(
     val right: String,
     val settings: String,
     val chTitle: String,
-    val chBackLabel: String,
-    val chBackHint: String,
-    val chMoveLabel: String,
-    val chMoveHint: String,
+    val syncNever: String,
+    val syncLast: (String, Int) -> String,
+    val syncRunning: String,
+    val syncFailed: String,
+    val syncNow: String,
+    val setChTitle: String,
+    val setChLabel: String,
+    val ok: String,
+    val cancel: String,
     val stepLabel: String,
     val stepHint: String,
     val homeLabel: String,
@@ -207,7 +218,7 @@ class Tr(
     val nextCh: String,
     val prevCh: String,
     val notPaired: String,
-    val connected: String,
+    val connectedCh: (Int) -> String,
     val searchHint: String,
     val tapToType: String,
     val ready: String,
@@ -246,11 +257,16 @@ val TR = mapOf(
         left = "Levo",
         right = "Desno",
         settings = "Nastavitve",
-        chTitle = "Program ▲/▼",
-        chBackLabel = "Čakanje po Nazaj (ms)",
-        chBackHint = "Koliko časa aplikacija počaka, da se odpre seznam programov (50–3000). Če preklop ne uspe, ga povečaj.",
-        chMoveLabel = "Čakanje po premiku (ms)",
-        chMoveHint = "Premor med premikom po seznamu in potrditvijo z OK (20–2000).",
+        chTitle = "Seznam programov",
+        syncNever = "Seznam programov še ni bil prenesen.",
+        syncLast = { d, n -> "Zadnja sinhronizacija: $d · $n pozicij" },
+        syncRunning = "Prenašam seznam programov…",
+        syncFailed = "Zadnji poskus ni uspel, uporabljam prejšnji seznam.",
+        syncNow = "Posodobi zdaj",
+        setChTitle = "Na katerem programu si?",
+        setChLabel = "Številka programa",
+        ok = "V redu",
+        cancel = "Prekliči",
         stepLabel = "Premor med koraki pri iskanju (ms)",
         stepHint = "Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.",
         homeLabel = "Čakanje po Domov (ms)",
@@ -276,7 +292,7 @@ val TR = mapOf(
         nextCh = "Naslednji program",
         prevCh = "Prejšnji program",
         notPaired = "Box ni uparjen  ·  Poveži",
-        connected = "Povezano",
+        connectedCh = { n -> "Povezano  ·  Program $n" },
         searchHint = "Išči na TV",
         tapToType = "Tapni sem za tipkanje",
         ready = "Pripravljeno, tipkaj",
@@ -313,11 +329,16 @@ val TR = mapOf(
         left = "Left",
         right = "Right",
         settings = "Settings",
-        chTitle = "Channel ▲/▼",
-        chBackLabel = "Wait after Back (ms)",
-        chBackHint = "How long the app waits for the channel list to open (50–3000). If switching fails, increase it.",
-        chMoveLabel = "Wait after move (ms)",
-        chMoveHint = "Pause between moving in the list and confirming with OK (20–2000).",
+        chTitle = "Channel list",
+        syncNever = "The channel list hasn't been downloaded yet.",
+        syncLast = { d, n -> "Last sync: $d · $n positions" },
+        syncRunning = "Downloading channel list…",
+        syncFailed = "Last attempt failed, using the previous list.",
+        syncNow = "Update now",
+        setChTitle = "Which channel are you on?",
+        setChLabel = "Channel number",
+        ok = "OK",
+        cancel = "Cancel",
         stepLabel = "Delay between search steps (ms)",
         stepHint = "Lower = faster typing (5–1000). If letters are missing, increase it.",
         homeLabel = "Wait after Home (ms)",
@@ -343,7 +364,7 @@ val TR = mapOf(
         nextCh = "Next channel",
         prevCh = "Previous channel",
         notPaired = "Box not paired  ·  Connect",
-        connected = "Connected",
+        connectedCh = { n -> "Connected  ·  Channel $n" },
         searchHint = "Search on TV",
         tapToType = "Tap here to type",
         ready = "Ready, start typing",
@@ -380,11 +401,16 @@ val TR = mapOf(
         left = "Levo",
         right = "Desno",
         settings = "Podešavanja",
-        chTitle = "Kanal ▲/▼",
-        chBackLabel = "Čekanje posle Nazad (ms)",
-        chBackHint = "Koliko aplikacija čeka da se otvori lista kanala (50–3000). Ako promena ne uspe, povećaj ga.",
-        chMoveLabel = "Čekanje posle pomeranja (ms)",
-        chMoveHint = "Pauza između pomeranja po listi i potvrde sa OK (20–2000).",
+        chTitle = "Lista kanala",
+        syncNever = "Lista kanala još nije preuzeta.",
+        syncLast = { d, n -> "Poslednja sinhronizacija: $d · $n pozicija" },
+        syncRunning = "Preuzimam listu kanala…",
+        syncFailed = "Poslednji pokušaj nije uspeo, koristim prethodnu listu.",
+        syncNow = "Ažuriraj sada",
+        setChTitle = "Na kom si kanalu?",
+        setChLabel = "Broj kanala",
+        ok = "U redu",
+        cancel = "Otkaži",
         stepLabel = "Pauza između koraka pri pretrazi (ms)",
         stepHint = "Manji broj = brže kucanje (5–1000). Ako slova nedostaju, povećaj ga.",
         homeLabel = "Čekanje posle Početne (ms)",
@@ -410,7 +436,7 @@ val TR = mapOf(
         nextCh = "Sledeći kanal",
         prevCh = "Prethodni kanal",
         notPaired = "Boks nije uparen  ·  Poveži",
-        connected = "Povezano",
+        connectedCh = { n -> "Povezano  ·  Kanal $n" },
         searchHint = "Traži na TV-u",
         tapToType = "Dodirni ovde za kucanje",
         ready = "Spremno, kucaj",
@@ -866,8 +892,16 @@ class AppState(private val ctx: Context) {
     var connected by mutableStateOf(false)
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
-    var chBackWait by mutableStateOf(prefs.getInt("chback", 400))
-    var chMoveWait by mutableStateOf(prefs.getInt("chmove", 150))
+    var channel by mutableStateOf(prefs.getInt("channel", 1))
+    var positions by mutableStateOf(
+        (prefs.getString("chpos", "") ?: "").split(',').mapNotNull { it.trim().toIntOrNull() }
+    )
+    var lastSync by mutableStateOf(prefs.getLong("chsync", 0L))
+    var syncRunning by mutableStateOf(false)
+    var syncFailed by mutableStateOf(false)
+    var showChannelDialog by mutableStateOf(false)
+    /** Nastavi MainActivity: zažene branje programske sheme v ozadju. */
+    var syncRunner: (() -> Unit)? = null
     var stepDelay by mutableStateOf(prefs.getInt("step", 30))
     var homeWait by mutableStateOf(prefs.getInt("home", 500))
     var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
@@ -936,6 +970,8 @@ class AppState(private val ctx: Context) {
     private var remote: RemoteConnection? = null
     private var gen = 0
     private var running = false
+    private var entry = ""
+    private var lastDigit = 0L
 
     // položaj na EON tipkovnici (uporablja samo nit "keys")
     // kr = 0 pomeni: izbrana je tipka za brisanje
@@ -1054,30 +1090,65 @@ class AppState(private val ctx: Context) {
         }
     }
 
-    fun saveTimings(step: Int, home: Int, screen: Int, chBack: Int, chMove: Int) {
+    fun saveTimings(step: Int, home: Int, screen: Int) {
         stepDelay = step
         homeWait = home
         screenWait = screen
-        chBackWait = chBack
-        chMoveWait = chMove
-        prefs.edit()
-            .putInt("step", step).putInt("home", home).putInt("screen", screen)
-            .putInt("chback", chBack).putInt("chmove", chMove)
-            .apply()
+        prefs.edit().putInt("step", step).putInt("home", home).putInt("screen", screen).apply()
     }
 
-    /** Številka s številčnice. */
-    fun digit(n: Int) = press(7 + n)
+    /** Ročni popravek: na katerem programu je box zdaj. */
+    fun setChannel(c: Int) {
+        channel = c
+        prefs.edit().putInt("channel", c).apply()
+    }
 
-    /** Program ▲ / ▼: Nazaj odpre seznam programov, premik dol/gor, OK potrdi. */
+    /** Ali je čas za dnevno osvežitev seznama programov. */
+    fun needsSync(): Boolean = System.currentTimeMillis() - lastSync > 24L * 3600 * 1000
+
+    /** Konec branja programske sheme (null = ni uspelo). */
+    fun syncDone(list: List<Int>?) {
+        syncRunning = false
+        if (list != null && list.size >= 20) {
+            val sorted = list.distinct().sorted()
+            positions = sorted
+            lastSync = System.currentTimeMillis()
+            syncFailed = false
+            prefs.edit()
+                .putString("chpos", sorted.joinToString(","))
+                .putLong("chsync", lastSync)
+                .apply()
+        } else {
+            syncFailed = true
+        }
+    }
+
+    /** Številka s številčnice: pošlje tipko in si zapomni program. */
+    fun digit(n: Int) {
+        val now = System.currentTimeMillis()
+        entry = if (now - lastDigit < 2000 && entry.length < 4) entry + n else n.toString()
+        lastDigit = now
+        entry.toIntOrNull()?.let { if (it > 0) setChannel(it) }
+        press(7 + n)
+    }
+
+    /** Program ▲ / ▼: vtipka naslednjo obstoječo pozicijo in potrdi z OK. */
     fun channelStep(d: Int) {
+        val list = positions
+        val c = when {
+            list.isEmpty() -> (channel + d).coerceAtLeast(1)
+            d > 0 -> list.firstOrNull { it > channel } ?: list.first()
+            else -> list.lastOrNull { it < channel } ?: list.last()
+        }
+        setChannel(c)
+        entry = ""
         closeSearch()
         ledTick++
         keys.execute {
-            remote?.key(4)
-            Thread.sleep(chBackWait.toLong())
-            remote?.key(if (d > 0) 20 else 19)
-            Thread.sleep(chMoveWait.toLong())
+            for (ch in c.toString()) {
+                remote?.key(7 + (ch - '0'))
+                Thread.sleep(100)
+            }
             remote?.key(23)
         }
     }
@@ -1198,6 +1269,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         state = AppState(applicationContext)
+        state.syncRunner = { runSync() }
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -1217,13 +1289,125 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         if (state.paired) state.connect()
+        if (state.needsSync()) runSync()
     }
 
     override fun onStop() {
         super.onStop()
         state.disconnect()
     }
+
+    override fun onDestroy() {
+        stopSync(null)
+        super.onDestroy()
+    }
+
+    // ---------- branje programske sheme v ozadju (nevidni brskalnik) ----------
+
+    private var web: WebView? = null
+    private val syncHandler = Handler(Looper.getMainLooper())
+    private var best: List<Int> = emptyList()
+
+    private fun stopSync(result: List<Int>?) {
+        val w = web ?: return
+        web = null
+        syncHandler.removeCallbacksAndMessages(null)
+        try {
+            (w.parent as? ViewGroup)?.removeView(w)
+            w.destroy()
+        } catch (_: Exception) {}
+        state.syncDone(result)
+    }
+
+    private fun runSync() {
+        if (web != null) return
+        state.syncRunning = true
+        best = emptyList()
+        val w = WebView(this)
+        web = w
+        w.alpha = 0f
+        addContentView(w, ViewGroup.LayoutParams(1, 1))
+        w.settings.javaScriptEnabled = true
+        w.settings.domStorageEnabled = true
+
+        var started = false
+        var iter = 0
+        var lastCount = -1
+        var stable = 0
+        lateinit var tick: Runnable
+        tick = Runnable {
+            if (web !== w) return@Runnable
+            iter++
+            w.evaluateJavascript(SYNC_JS) { res ->
+                var more = false
+                try {
+                    val json = org.json.JSONObject(org.json.JSONTokener(res).nextValue() as String)
+                    more = json.optBoolean("more")
+                    val arr = json.optJSONArray("list")
+                    val list = mutableListOf<Int>()
+                    if (arr != null) for (i in 0 until arr.length()) list.add(arr.getInt(i))
+                    if (list.size >= best.size) best = list
+                } catch (_: Exception) {}
+                if (!more && best.size == lastCount) stable++ else stable = 0
+                lastCount = best.size
+                if ((stable >= 2 && (best.isNotEmpty() || iter >= 10)) || iter >= 60) stopSync(best) else syncHandler.postDelayed(tick, 1500)
+            }
+        }
+        w.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                if (!started) {
+                    started = true
+                    syncHandler.postDelayed(tick, 2500)
+                }
+            }
+        }
+        // varovalo: najdlje 2 minuti
+        syncHandler.postDelayed({ if (web === w) stopSync(best) }, 120_000)
+        w.loadUrl("https://sl.eon.tv/programska-shema/")
+    }
 }
+
+/** Na strani klikne "Prikaži več" (če obstaja) in prebere vse pozicije programov. */
+private const val SYNC_JS = """
+(function(){
+  var btn = null;
+  var els = document.querySelectorAll('button,a,span,div');
+  for (var i = 0; i < els.length; i++) {
+    var e = els[i];
+    if (e.children.length > 2) continue;
+    var tx = (e.innerText || '').trim().toLowerCase();
+    if (tx.length < 30 && (tx.indexOf('prikaži več') == 0 || tx.indexOf('prikazi vec') == 0 || tx.indexOf('prikaži vec') == 0) && e.offsetParent !== null) { btn = e; break; }
+  }
+  var set = {};
+  var cells = document.querySelectorAll('[data-label]');
+  for (var a = 0; a < cells.length; a++) {
+    if (/pozicija/i.test(cells[a].getAttribute('data-label'))) {
+      var n1 = parseInt((cells[a].innerText || '').replace(/\D/g, ''));
+      if (n1 > 0) set[n1] = 1;
+    }
+  }
+  var tables = document.querySelectorAll('table');
+  for (var b = 0; b < tables.length; b++) {
+    var hs = tables[b].querySelectorAll('th'), idx = -1;
+    for (var j = 0; j < hs.length; j++) if (/pozicija/i.test(hs[j].innerText)) idx = j;
+    if (idx >= 0) {
+      var rows = tables[b].querySelectorAll('tr');
+      for (var r = 0; r < rows.length; r++) {
+        var c = rows[r].children[idx];
+        if (c && c.tagName == 'TD') {
+          var n2 = parseInt((c.innerText || '').replace(/\D/g, ''));
+          if (n2 > 0) set[n2] = 1;
+        }
+      }
+    }
+  }
+  var re = /Pozicija\s*:?\s*(\d{1,4})/gi, m, txt = document.body.innerText;
+  while ((m = re.exec(txt)) !== null) set[parseInt(m[1])] = 1;
+  var list = Object.keys(set).map(Number);
+  if (btn) btn.click();
+  return JSON.stringify({ more: !!btn, list: list });
+})()
+"""
 
 @Composable
 fun App(s: AppState) {
@@ -1392,8 +1576,6 @@ fun SettingsScreen(s: AppState) {
     var homeText by remember { mutableStateOf(s.homeWait.toString()) }
     var screenText by remember { mutableStateOf(s.screenWait.toString()) }
     var testCode by remember { mutableStateOf("") }
-    var chBackText by remember { mutableStateOf(s.chBackWait.toString()) }
-    var chMoveText by remember { mutableStateOf(s.chMoveWait.toString()) }
     val t = s.tr
 
     BackHandler { s.showSettings = false }
@@ -1435,22 +1617,24 @@ fun SettingsScreen(s: AppState) {
         )
         Text(t.screenHint, color = DimColor, fontSize = 13.sp)
         Text(t.chTitle, style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(
-            value = chBackText,
-            onValueChange = { chBackText = it.filter { c -> c.isDigit() }.take(4) },
-            label = { Text(t.chBackLabel) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+        Text(
+            when {
+                s.syncRunning -> t.syncRunning
+                s.lastSync == 0L -> t.syncNever
+                else -> t.syncLast(
+                    java.text.SimpleDateFormat("d. M. yyyy HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(s.lastSync)),
+                    s.positions.size
+                )
+            },
+            color = LabelColor, fontSize = 14.sp
         )
-        Text(t.chBackHint, color = DimColor, fontSize = 13.sp)
-        OutlinedTextField(
-            value = chMoveText,
-            onValueChange = { chMoveText = it.filter { c -> c.isDigit() }.take(4) },
-            label = { Text(t.chMoveLabel) },
-            singleLine = true,
+        if (s.syncFailed && !s.syncRunning) Text(t.syncFailed, color = Color(0xFFFBBF24), fontSize = 13.sp)
+        OutlinedButton(
+            onClick = { s.syncRunner?.invoke() },
+            enabled = !s.syncRunning,
             modifier = Modifier.fillMaxWidth()
-        )
-        Text(t.chMoveHint, color = DimColor, fontSize = 13.sp)
+        ) { Text(t.syncNow) }
         Text(t.kbTitle, style = MaterialTheme.typography.titleMedium)
         Text(t.kbMustMatch, color = DimColor, fontSize = 13.sp)
         LangPicker(s)
@@ -1467,9 +1651,7 @@ fun SettingsScreen(s: AppState) {
                 s.saveTimings(
                     (stepText.toIntOrNull() ?: 30).coerceIn(5, 1000),
                     (homeText.toIntOrNull() ?: 500).coerceIn(50, 5000),
-                    (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000),
-                    (chBackText.toIntOrNull() ?: 400).coerceIn(50, 3000),
-                    (chMoveText.toIntOrNull() ?: 150).coerceIn(20, 2000)
+                    (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000)
                 )
                 s.showSettings = false
             },
@@ -1768,8 +1950,10 @@ fun StatusBar(s: AppState) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                if (s.connected) t.connected else s.status.ifEmpty { t.connecting },
-                Modifier.weight(1f),
+                if (s.connected) t.connectedCh(s.channel) else s.status.ifEmpty { t.connecting },
+                Modifier
+                    .weight(1f)
+                    .clickable { s.showChannelDialog = true },
                 fontSize = 12.sp,
                 color = LabelColor
             )
@@ -1896,6 +2080,35 @@ fun SearchDock(s: AppState, modifier: Modifier) {
     }
 }
 
+/** Hiter popravek trenutnega programa. */
+@Composable
+fun ChannelDialog(s: AppState) {
+    val t = s.tr
+    var text by remember { mutableStateOf(s.channel.toString()) }
+    AlertDialog(
+        onDismissRequest = { s.showChannelDialog = false },
+        title = { Text(t.setChTitle) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.filter { c -> c.isDigit() }.take(4) },
+                label = { Text(t.setChLabel) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        },
+        confirmButton = {
+            Button(onClick = {
+                text.toIntOrNull()?.let { if (it > 0) s.setChannel(it) }
+                s.showChannelDialog = false
+            }) { Text(t.ok) }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = { s.showChannelDialog = false }) { Text(t.cancel) }
+        }
+    )
+}
+
 // ---------- daljinec ----------
 
 @Composable
@@ -2020,6 +2233,8 @@ fun RemoteScreen(s: AppState) {
                 }
             }
         }
+
+        if (s.showChannelDialog) ChannelDialog(s)
 
         // iskalno polje nad tipkovnico (daljinec ostane pri miru)
         if (s.searchOpen) {
