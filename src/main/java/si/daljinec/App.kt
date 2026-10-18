@@ -177,10 +177,11 @@ class Tr(
     val left: String,
     val right: String,
     val settings: String,
-    val chExplain: String,
-    val chList: String,
-    val chEmpty: String,
-    val chCount: (Int) -> String,
+    val chTitle: String,
+    val chBackLabel: String,
+    val chBackHint: String,
+    val chMoveLabel: String,
+    val chMoveHint: String,
     val stepLabel: String,
     val stepHint: String,
     val homeLabel: String,
@@ -206,7 +207,7 @@ class Tr(
     val nextCh: String,
     val prevCh: String,
     val notPaired: String,
-    val connectedCh: (Int) -> String,
+    val connected: String,
     val searchHint: String,
     val tapToType: String,
     val ready: String,
@@ -245,10 +246,11 @@ val TR = mapOf(
         left = "Levo",
         right = "Desno",
         settings = "Nastavitve",
-        chExplain = "Vpiši programe, ki obstajajo, npr. 1-10, 12-45, 50. Prog ▲/▼ bosta preskočila manjkajoče. Prazno = vsi po vrsti.",
-        chList = "Seznam programov",
-        chEmpty = "Seznam je prazen (vsi programi po vrsti).",
-        chCount = { n -> "Prepoznanih programov: $n" },
+        chTitle = "Program ▲/▼",
+        chBackLabel = "Čakanje po Nazaj (ms)",
+        chBackHint = "Koliko časa aplikacija počaka, da se odpre seznam programov (50–3000). Če preklop ne uspe, ga povečaj.",
+        chMoveLabel = "Čakanje po premiku (ms)",
+        chMoveHint = "Premor med premikom po seznamu in potrditvijo z OK (20–2000).",
         stepLabel = "Premor med koraki pri iskanju (ms)",
         stepHint = "Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.",
         homeLabel = "Čakanje po Domov (ms)",
@@ -274,7 +276,7 @@ val TR = mapOf(
         nextCh = "Naslednji program",
         prevCh = "Prejšnji program",
         notPaired = "Box ni uparjen  ·  Poveži",
-        connectedCh = { n -> "Povezano  ·  Program $n" },
+        connected = "Povezano",
         searchHint = "Išči na TV",
         tapToType = "Tapni sem za tipkanje",
         ready = "Pripravljeno, tipkaj",
@@ -311,10 +313,11 @@ val TR = mapOf(
         left = "Left",
         right = "Right",
         settings = "Settings",
-        chExplain = "Enter the channels that exist, e.g. 1-10, 12-45, 50. Channel ▲/▼ will skip the missing ones. Empty = all in order.",
-        chList = "Channel list",
-        chEmpty = "The list is empty (all channels in order).",
-        chCount = { n -> "Channels recognised: $n" },
+        chTitle = "Channel ▲/▼",
+        chBackLabel = "Wait after Back (ms)",
+        chBackHint = "How long the app waits for the channel list to open (50–3000). If switching fails, increase it.",
+        chMoveLabel = "Wait after move (ms)",
+        chMoveHint = "Pause between moving in the list and confirming with OK (20–2000).",
         stepLabel = "Delay between search steps (ms)",
         stepHint = "Lower = faster typing (5–1000). If letters are missing, increase it.",
         homeLabel = "Wait after Home (ms)",
@@ -340,7 +343,7 @@ val TR = mapOf(
         nextCh = "Next channel",
         prevCh = "Previous channel",
         notPaired = "Box not paired  ·  Connect",
-        connectedCh = { n -> "Connected  ·  Channel $n" },
+        connected = "Connected",
         searchHint = "Search on TV",
         tapToType = "Tap here to type",
         ready = "Ready, start typing",
@@ -377,10 +380,11 @@ val TR = mapOf(
         left = "Levo",
         right = "Desno",
         settings = "Podešavanja",
-        chExplain = "Unesi kanale koji postoje, npr. 1-10, 12-45, 50. Kanal ▲/▼ će preskočiti one kojih nema. Prazno = svi redom.",
-        chList = "Lista kanala",
-        chEmpty = "Lista je prazna (svi kanali redom).",
-        chCount = { n -> "Prepoznatih kanala: $n" },
+        chTitle = "Kanal ▲/▼",
+        chBackLabel = "Čekanje posle Nazad (ms)",
+        chBackHint = "Koliko aplikacija čeka da se otvori lista kanala (50–3000). Ako promena ne uspe, povećaj ga.",
+        chMoveLabel = "Čekanje posle pomeranja (ms)",
+        chMoveHint = "Pauza između pomeranja po listi i potvrde sa OK (20–2000).",
         stepLabel = "Pauza između koraka pri pretrazi (ms)",
         stepHint = "Manji broj = brže kucanje (5–1000). Ako slova nedostaju, povećaj ga.",
         homeLabel = "Čekanje posle Početne (ms)",
@@ -406,7 +410,7 @@ val TR = mapOf(
         nextCh = "Sledeći kanal",
         prevCh = "Prethodni kanal",
         notPaired = "Boks nije uparen  ·  Poveži",
-        connectedCh = { n -> "Povezano  ·  Kanal $n" },
+        connected = "Povezano",
         searchHint = "Traži na TV-u",
         tapToType = "Dodirni ovde za kucanje",
         ready = "Spremno, kucaj",
@@ -812,28 +816,6 @@ class Discovery(ctx: Context, private val onFound: (String, String) -> Unit) {
     }
 }
 
-// ---------- seznam programov ----------
-
-/** "1-10, 12, 15-20" -> seznam številk */
-fun parseChannels(t: String): List<Int> {
-    val out = sortedSetOf<Int>()
-    for (part in t.split(',', ';')) {
-        val p = part.trim()
-        if (p.isEmpty()) continue
-        val ab = p.split('-')
-        if (ab.size == 2) {
-            val a = ab[0].trim().toIntOrNull()
-            val b = ab[1].trim().toIntOrNull()
-            if (a != null && b != null && a in 1..b && b - a < 2000) {
-                for (i in a..b) out.add(i)
-            }
-        } else {
-            p.toIntOrNull()?.let { if (it > 0) out.add(it) }
-        }
-    }
-    return out.toList()
-}
-
 // ---------- EON tipkovnica ----------
 
 /** Vrstice 1-5 EON tipkovnice za vsak jezik, vsaka ima 6 stolpcev.
@@ -884,8 +866,8 @@ class AppState(private val ctx: Context) {
     var connected by mutableStateOf(false)
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
-    var channel by mutableStateOf(prefs.getInt("channel", 1))
-    var channelList by mutableStateOf(prefs.getString("chlist", "") ?: "")
+    var chBackWait by mutableStateOf(prefs.getInt("chback", 400))
+    var chMoveWait by mutableStateOf(prefs.getInt("chmove", 150))
     var stepDelay by mutableStateOf(prefs.getInt("step", 30))
     var homeWait by mutableStateOf(prefs.getInt("home", 500))
     var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
@@ -954,8 +936,6 @@ class AppState(private val ctx: Context) {
     private var remote: RemoteConnection? = null
     private var gen = 0
     private var running = false
-    private var entry = ""
-    private var lastDigit = 0L
 
     // položaj na EON tipkovnici (uporablja samo nit "keys")
     // kr = 0 pomeni: izbrana je tipka za brisanje
@@ -1074,51 +1054,31 @@ class AppState(private val ctx: Context) {
         }
     }
 
-    private fun saveChannel(c: Int) {
-        channel = c
-        prefs.edit().putInt("channel", c).apply()
-    }
-
-    fun saveChannelList(t: String) {
-        channelList = t
-        prefs.edit().putString("chlist", t).apply()
-    }
-
-    fun saveTimings(step: Int, home: Int, screen: Int) {
+    fun saveTimings(step: Int, home: Int, screen: Int, chBack: Int, chMove: Int) {
         stepDelay = step
         homeWait = home
         screenWait = screen
-        prefs.edit().putInt("step", step).putInt("home", home).putInt("screen", screen).apply()
+        chBackWait = chBack
+        chMoveWait = chMove
+        prefs.edit()
+            .putInt("step", step).putInt("home", home).putInt("screen", screen)
+            .putInt("chback", chBack).putInt("chmove", chMove)
+            .apply()
     }
 
-    /** Številka s številčnice: pošlje tipko in si zapomni program. */
-    fun digit(n: Int) {
-        val now = System.currentTimeMillis()
-        entry = if (now - lastDigit < 2000 && entry.length < 4) entry + n else n.toString()
-        lastDigit = now
-        entry.toIntOrNull()?.let { if (it > 0) saveChannel(it) }
-        press(7 + n)
-    }
+    /** Številka s številčnice. */
+    fun digit(n: Int) = press(7 + n)
 
-    /** Prog + / Prog −: takoj vtipka naslednji obstoječi program in potrdi z OK. */
+    /** Program ▲ / ▼: Nazaj odpre seznam programov, premik dol/gor, OK potrdi. */
     fun channelStep(d: Int) {
-        val list = parseChannels(channelList)
-        val c = when {
-            list.isEmpty() -> (channel + d).coerceAtLeast(1)
-            d > 0 -> list.firstOrNull { it > channel } ?: list.first()
-            else -> list.lastOrNull { it < channel } ?: list.last()
-        }
-        saveChannel(c)
-        entry = ""
         closeSearch()
         ledTick++
         keys.execute {
-            for (ch in c.toString()) {
-                remote?.key(7 + (ch - '0'))
-                Thread.sleep(100)
-            }
+            remote?.key(4)
+            Thread.sleep(chBackWait.toLong())
+            remote?.key(if (d > 0) 20 else 19)
+            Thread.sleep(chMoveWait.toLong())
             remote?.key(23)
-            Thread.sleep(100)
         }
     }
 
@@ -1428,12 +1388,12 @@ fun LangScreen(s: AppState) {
 
 @Composable
 fun SettingsScreen(s: AppState) {
-    var list by remember { mutableStateOf(s.channelList) }
     var stepText by remember { mutableStateOf(s.stepDelay.toString()) }
     var homeText by remember { mutableStateOf(s.homeWait.toString()) }
     var screenText by remember { mutableStateOf(s.screenWait.toString()) }
     var testCode by remember { mutableStateOf("") }
-    val count = parseChannels(list).size
+    var chBackText by remember { mutableStateOf(s.chBackWait.toString()) }
+    var chMoveText by remember { mutableStateOf(s.chMoveWait.toString()) }
     val t = s.tr
 
     BackHandler { s.showSettings = false }
@@ -1450,14 +1410,6 @@ fun SettingsScreen(s: AppState) {
         Text(t.appLang, style = MaterialTheme.typography.titleMedium)
         Choices(listOf("auto" to t.auto) + LANG_NAMES, s.uiLangPref, 2) { s.saveUiLang(it) }
         Spacer(Modifier.height(4.dp))
-        Text(t.chExplain)
-        OutlinedTextField(
-            value = list,
-            onValueChange = { list = it },
-            label = { Text(t.chList) },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Text(if (count == 0) t.chEmpty else t.chCount(count))
         OutlinedTextField(
             value = stepText,
             onValueChange = { stepText = it.filter { c -> c.isDigit() }.take(4) },
@@ -1482,6 +1434,23 @@ fun SettingsScreen(s: AppState) {
             modifier = Modifier.fillMaxWidth()
         )
         Text(t.screenHint, color = DimColor, fontSize = 13.sp)
+        Text(t.chTitle, style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = chBackText,
+            onValueChange = { chBackText = it.filter { c -> c.isDigit() }.take(4) },
+            label = { Text(t.chBackLabel) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(t.chBackHint, color = DimColor, fontSize = 13.sp)
+        OutlinedTextField(
+            value = chMoveText,
+            onValueChange = { chMoveText = it.filter { c -> c.isDigit() }.take(4) },
+            label = { Text(t.chMoveLabel) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(t.chMoveHint, color = DimColor, fontSize = 13.sp)
         Text(t.kbTitle, style = MaterialTheme.typography.titleMedium)
         Text(t.kbMustMatch, color = DimColor, fontSize = 13.sp)
         LangPicker(s)
@@ -1495,11 +1464,12 @@ fun SettingsScreen(s: AppState) {
         }
         Button(
             onClick = {
-                s.saveChannelList(list)
                 s.saveTimings(
                     (stepText.toIntOrNull() ?: 30).coerceIn(5, 1000),
                     (homeText.toIntOrNull() ?: 500).coerceIn(50, 5000),
-                    (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000)
+                    (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000),
+                    (chBackText.toIntOrNull() ?: 400).coerceIn(50, 3000),
+                    (chMoveText.toIntOrNull() ?: 150).coerceIn(20, 2000)
                 )
                 s.showSettings = false
             },
@@ -1798,7 +1768,7 @@ fun StatusBar(s: AppState) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                if (s.connected) t.connectedCh(s.channel) else s.status.ifEmpty { t.connecting },
+                if (s.connected) t.connected else s.status.ifEmpty { t.connecting },
                 Modifier.weight(1f),
                 fontSize = 12.sp,
                 color = LabelColor
