@@ -95,6 +95,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -904,6 +908,9 @@ fun eonPos(ch: Char, lang: String): Pair<Int, Int>? {
 
 // ---------- programi ----------
 
+/** Od te pozicije naprej so radijski programi, teh ne beremo. */
+const val RADIO_FROM = 850
+
 /** En program iz programske sheme: pozicija, ime in naslov logotipa. */
 data class Ch(val pos: Int, val name: String, val logo: String)
 
@@ -945,7 +952,7 @@ class AppState(private val ctx: Context) {
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
     var channel by mutableStateOf(prefs.getInt("channel", 1))
-    var channels by mutableStateOf(channelsFromJson(prefs.getString("chlist2", "[]") ?: "[]"))
+    var channels by mutableStateOf(channelsFromJson(prefs.getString("chlist2", "[]") ?: "[]").filter { it.pos < RADIO_FROM })
     var logoTick by mutableStateOf(0)
     var showListDialog by mutableStateOf(false)
     private val logoCache = HashMap<String, ImageBitmap>()
@@ -1162,7 +1169,7 @@ class AppState(private val ctx: Context) {
     fun syncDone(list: List<Ch>?) {
         syncRunning = false
         if (list != null && list.size >= 20) {
-            val sorted = list.distinctBy { it.pos }.sortedBy { it.pos }
+            val sorted = list.filter { it.pos < RADIO_FROM }.distinctBy { it.pos }.sortedBy { it.pos }
             channels = sorted
             lastSync = System.currentTimeMillis()
             syncFailed = false
@@ -2303,19 +2310,17 @@ fun ChLogo(s: AppState, c: Ch, fade: Float, h: Dp) {
     }
 }
 
-/** Boben programov: vrtenje samo premika, tap preklopi. */
+/** Boben programov: brez ozadja, izbrani program ima mehak sij. Vrtenje samo premika, tap preklopi. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
     val t = s.tr
     val list = s.channels
     val rowH = 22.dp * k
-    val bg = Color(0xFF15181D)
-    val shape = RoundedCornerShape(16.dp)
 
     if (list.isEmpty()) {
         Box(
-            modifier.height(rowH * 7).clip(shape).background(bg).padding(10.dp),
+            modifier.height(rowH * 7).padding(10.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -2339,17 +2344,41 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
             info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - mid) }?.index ?: 0
         }
     }
+    val glowText = TextStyle(shadow = Shadow(GlowColor.copy(alpha = 0.9f), Offset.Zero, 14f))
 
-    Box(modifier.height(rowH * 7).clip(shape).background(bg)) {
+    Box(
+        modifier
+            .height(rowH * 7)
+            // zgoraj in spodaj programi postopno izginejo v ozadje daljinca
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.22f to Color.Black,
+                        0.78f to Color.Black,
+                        1f to Color.Transparent
+                    ),
+                    blendMode = BlendMode.DstIn
+                )
+            }
+    ) {
+        // mehak sij za izbranim programom
         Box(
             Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp)
                 .height(rowH)
-                .clip(RoundedCornerShape(9.dp))
-                .background(Color(0xFF16233A))
-                .border(1.5.dp, AccentColor, RoundedCornerShape(9.dp))
+                .clip(RoundedCornerShape(rowH / 2))
+                .background(
+                    Brush.horizontalGradient(
+                        0f to Color.Transparent,
+                        0.25f to GlowColor.copy(alpha = 0.22f),
+                        0.75f to GlowColor.copy(alpha = 0.22f),
+                        1f to Color.Transparent
+                    )
+                )
         )
         LazyColumn(
             state = state,
@@ -2360,21 +2389,21 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
             itemsIndexed(list) { i, c ->
                 val d = abs(i - center)
                 val col = when (d) {
-                    0 -> TextColor
+                    0 -> Color.White
                     1 -> LabelColor
                     else -> Color(0xFF5A616B)
                 }
                 val alpha = when (d) {
                     0 -> 1f
-                    1 -> 0.75f
-                    else -> 0.45f
+                    1 -> 0.8f
+                    else -> 0.5f
                 }
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .height(rowH)
                         .clickable { s.pickChannel(c.pos) }
-                        .padding(horizontal = 10.dp),
+                        .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -2392,26 +2421,13 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
                         c.name,
                         fontSize = (12 * k).sp,
                         color = col,
+                        style = if (d == 0) glowText else TextStyle.Default,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(rowH * 1.6f)
-                .background(Brush.verticalGradient(listOf(bg, Color.Transparent)))
-        )
-        Box(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(rowH * 1.6f)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, bg)))
-        )
     }
 }
 
@@ -2495,36 +2511,39 @@ fun RemoteScreen(s: AppState) {
                         }
                     }
 
-                    // glasnost in boben programov
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp * k)
-                        ) {
-                            RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
-                                Text("+", fontSize = (28 * k).sp, color = TextColor)
+                    // glasnost (pod gumbom Nazaj) in boben programov (do desnega roba gumba Išči)
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val col = (maxWidth - gap * 2) / 3
+                        val endPad = (col - big) / 2
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(
+                                Modifier.width(col),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                            ) {
+                                RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
+                                    Text("+", fontSize = (28 * k).sp, color = TextColor)
+                                }
+                                RoundKey(small, onDown = { s.volMinusDown() }, onUp = { s.volMinusUp() }) {
+                                    Text("−", fontSize = (28 * k).sp, color = TextColor)
+                                }
+                                Text(t.volume, fontSize = (11 * k).sp, color = LabelColor)
                             }
-                            RoundKey(small, onDown = { s.volMinusDown() }, onUp = { s.volMinusUp() }) {
-                                Text("−", fontSize = (28 * k).sp, color = TextColor)
+                            Spacer(Modifier.width(gap))
+                            Column(
+                                Modifier.width(col * 2 + gap - endPad),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                ChannelDrum(s, k, Modifier.fillMaxWidth())
+                                Text(t.drumHint, fontSize = (11 * k).sp, color = LabelColor)
                             }
-                            Text(t.volume, fontSize = (11 * k).sp, color = LabelColor)
-                        }
-                        Column(
-                            Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            ChannelDrum(s, k, Modifier.fillMaxWidth())
-                            Text(t.drumHint, fontSize = (11 * k).sp, color = LabelColor)
                         }
                     }
                 }
             }
         }
+
 
         // iskalno polje nad tipkovnico (daljinec ostane pri miru)
         if (s.searchOpen) {
