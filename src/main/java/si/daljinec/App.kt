@@ -3,6 +3,7 @@ package si.daljinec
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -34,6 +35,12 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -83,6 +90,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -119,6 +130,7 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509KeyManager
 import javax.net.ssl.X509TrustManager
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.max
@@ -193,6 +205,9 @@ class Tr(
     val setChLabel: String,
     val ok: String,
     val cancel: String,
+    val showList: String,
+    val drumEmpty: String,
+    val drumHint: String,
     val stepLabel: String,
     val stepHint: String,
     val homeLabel: String,
@@ -267,6 +282,9 @@ val TR = mapOf(
         setChLabel = "Številka programa",
         ok = "V redu",
         cancel = "Prekliči",
+        showList = "Pokaži prebrani seznam",
+        drumEmpty = "Seznam programov se prenaša…",
+        drumHint = "Program · tapni za preklop",
         stepLabel = "Premor med koraki pri iskanju (ms)",
         stepHint = "Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.",
         homeLabel = "Čakanje po Domov (ms)",
@@ -339,6 +357,9 @@ val TR = mapOf(
         setChLabel = "Channel number",
         ok = "OK",
         cancel = "Cancel",
+        showList = "Show downloaded list",
+        drumEmpty = "Downloading channel list…",
+        drumHint = "Channel · tap to switch",
         stepLabel = "Delay between search steps (ms)",
         stepHint = "Lower = faster typing (5–1000). If letters are missing, increase it.",
         homeLabel = "Wait after Home (ms)",
@@ -411,6 +432,9 @@ val TR = mapOf(
         setChLabel = "Broj kanala",
         ok = "U redu",
         cancel = "Otkaži",
+        showList = "Prikaži preuzetu listu",
+        drumEmpty = "Lista kanala se preuzima…",
+        drumHint = "Kanal · dodirni za promenu",
         stepLabel = "Pauza između koraka pri pretrazi (ms)",
         stepHint = "Manji broj = brže kucanje (5–1000). Ako slova nedostaju, povećaj ga.",
         homeLabel = "Čekanje posle Početne (ms)",
@@ -878,6 +902,34 @@ fun eonPos(ch: Char, lang: String): Pair<Int, Int>? {
     return null
 }
 
+// ---------- programi ----------
+
+/** En program iz programske sheme: pozicija, ime in naslov logotipa. */
+data class Ch(val pos: Int, val name: String, val logo: String)
+
+fun channelsToJson(list: List<Ch>): String {
+    val arr = org.json.JSONArray()
+    list.forEach { arr.put(org.json.JSONObject().put("p", it.pos).put("n", it.name).put("l", it.logo)) }
+    return arr.toString()
+}
+
+fun channelsFromJson(t: String): List<Ch> = try {
+    val arr = org.json.JSONArray(t)
+    (0 until arr.length()).mapNotNull { i ->
+        val o = arr.getJSONObject(i)
+        val p = o.optInt("p", 0)
+        if (p > 0) Ch(p, o.optString("n", "").trim(), o.optString("l", "")) else null
+    }
+} catch (_: Exception) {
+    emptyList()
+}
+
+/** Kratica za kanal brez logotipa (npr. "POP TV" -> "POP"). */
+fun initials(name: String): String {
+    val up = name.filter { it.isUpperCase() || it.isDigit() }.take(3)
+    return if (up.isNotEmpty()) up else name.take(2).uppercase()
+}
+
 // ---------- stanje aplikacije ----------
 
 class AppState(private val ctx: Context) {
@@ -893,13 +945,13 @@ class AppState(private val ctx: Context) {
     var waitingCode by mutableStateOf(false)
     var busy by mutableStateOf(false)
     var channel by mutableStateOf(prefs.getInt("channel", 1))
-    var positions by mutableStateOf(
-        (prefs.getString("chpos", "") ?: "").split(',').mapNotNull { it.trim().toIntOrNull() }
-    )
+    var channels by mutableStateOf(channelsFromJson(prefs.getString("chlist2", "[]") ?: "[]"))
+    var logoTick by mutableStateOf(0)
+    var showListDialog by mutableStateOf(false)
+    private val logoCache = HashMap<String, ImageBitmap>()
     var lastSync by mutableStateOf(prefs.getLong("chsync", 0L))
     var syncRunning by mutableStateOf(false)
     var syncFailed by mutableStateOf(false)
-    var showChannelDialog by mutableStateOf(false)
     /** Nastavi MainActivity: zažene branje programske sheme v ozadju. */
     var syncRunner: (() -> Unit)? = null
     var stepDelay by mutableStateOf(prefs.getInt("step", 30))
@@ -1107,20 +1159,77 @@ class AppState(private val ctx: Context) {
     fun needsSync(): Boolean = System.currentTimeMillis() - lastSync > 24L * 3600 * 1000
 
     /** Konec branja programske sheme (null = ni uspelo). */
-    fun syncDone(list: List<Int>?) {
+    fun syncDone(list: List<Ch>?) {
         syncRunning = false
         if (list != null && list.size >= 20) {
-            val sorted = list.distinct().sorted()
-            positions = sorted
+            val sorted = list.distinctBy { it.pos }.sortedBy { it.pos }
+            channels = sorted
             lastSync = System.currentTimeMillis()
             syncFailed = false
             prefs.edit()
-                .putString("chpos", sorted.joinToString(","))
+                .putString("chlist2", channelsToJson(sorted))
                 .putLong("chsync", lastSync)
                 .apply()
+            downloadLogos(sorted)
         } else {
             syncFailed = true
         }
+    }
+
+    private fun logoFile(url: String) = File(File(ctx.filesDir, "logos"), "l" + url.hashCode().toUInt())
+
+    /** Prenese manjkajoče logotipe v telefon (v ozadju). */
+    private fun downloadLogos(list: List<Ch>) {
+        net.execute {
+            File(ctx.filesDir, "logos").mkdirs()
+            var got = 0
+            for (c in list) {
+                if (c.logo.isBlank() || !c.logo.startsWith("http")) continue
+                val f = logoFile(c.logo)
+                if (f.exists()) continue
+                try {
+                    val conn = java.net.URL(c.logo).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    conn.inputStream.use { inp -> f.outputStream().use { inp.copyTo(it) } }
+                    got++
+                    if (got % 20 == 0) main.post { logoTick++ }
+                } catch (_: Exception) {}
+            }
+            main.post { logoTick++ }
+        }
+    }
+
+    /** Logotip iz telefona (null, če ga še ni ali ni slika). */
+    fun logoBitmap(url: String): ImageBitmap? {
+        if (url.isBlank()) return null
+        logoCache[url]?.let { return it }
+        val f = logoFile(url)
+        if (!f.exists()) return null
+        val b = try { BitmapFactory.decodeFile(f.path)?.asImageBitmap() } catch (_: Exception) { null }
+        if (b != null) logoCache[url] = b
+        return b
+    }
+
+    fun channelName(pos: Int): String? = channels.firstOrNull { it.pos == pos }?.name?.takeIf { it.isNotBlank() }
+
+    // glasnost −: kratek pritisk zniža, dolg pritisk (0,6 s) utiša
+    private var minusMuted = false
+    private val muteRunnable = Runnable {
+        minusMuted = true
+        ledTick++
+        keys.execute { remote?.key(164) }
+    }
+
+    fun volMinusDown() {
+        closeSearch()
+        minusMuted = false
+        main.postDelayed(muteRunnable, 600)
+    }
+
+    fun volMinusUp() {
+        main.removeCallbacks(muteRunnable)
+        if (!minusMuted) press(25)
     }
 
     /** Številka s številčnice: pošlje tipko in si zapomni program. */
@@ -1132,14 +1241,8 @@ class AppState(private val ctx: Context) {
         press(7 + n)
     }
 
-    /** Program ▲ / ▼: vtipka naslednjo obstoječo pozicijo in potrdi z OK. */
-    fun channelStep(d: Int) {
-        val list = positions
-        val c = when {
-            list.isEmpty() -> (channel + d).coerceAtLeast(1)
-            d > 0 -> list.firstOrNull { it > channel } ?: list.first()
-            else -> list.lastOrNull { it < channel } ?: list.last()
-        }
+    /** Tap na program v bobnu: vtipka številko in potrdi z OK. */
+    fun pickChannel(c: Int) {
         saveChannel(c)
         entry = ""
         closeSearch()
@@ -1306,9 +1409,9 @@ class MainActivity : ComponentActivity() {
 
     private var web: WebView? = null
     private val syncHandler = Handler(Looper.getMainLooper())
-    private var best: List<Int> = emptyList()
+    private var best: List<Ch> = emptyList()
 
-    private fun stopSync(result: List<Int>?) {
+    private fun stopSync(result: List<Ch>?) {
         val w = web ?: return
         web = null
         syncHandler.removeCallbacksAndMessages(null)
@@ -1344,8 +1447,7 @@ class MainActivity : ComponentActivity() {
                     val json = org.json.JSONObject(org.json.JSONTokener(res).nextValue() as String)
                     more = json.optBoolean("more")
                     val arr = json.optJSONArray("list")
-                    val list = mutableListOf<Int>()
-                    if (arr != null) for (i in 0 until arr.length()) list.add(arr.getInt(i))
+                    val list = if (arr != null) channelsFromJson(arr.toString()) else emptyList()
                     if (list.size >= best.size) best = list
                 } catch (_: Exception) {}
                 if (!more && best.size == lastCount) stable++ else stable = 0
@@ -1367,43 +1469,72 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Na strani klikne "Prikaži več" (če obstaja) in prebere vse pozicije programov. */
+/** Na strani klikne "Prikaži več" (če obstaja) in prebere pozicijo, ime in logotip vseh programov. */
 private const val SYNC_JS = """
 (function(){
+  function abs(u){ try { return new URL(u, location.href).href; } catch(e) { return u || ''; } }
+  function imgOf(el){
+    if (!el) return '';
+    var im = el.querySelector('img');
+    if (im) return abs(im.currentSrc || im.src || im.getAttribute('data-src') || im.getAttribute('data-lazy-src') || '');
+    var all = el.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var bg = getComputedStyle(all[i]).backgroundImage;
+      if (bg && bg.indexOf('url(') == 0) return abs(bg.slice(4, -1).replace(/["']/g, ''));
+    }
+    return '';
+  }
+  function num(t){ var m = (t || '').match(/\d{1,4}/); return m ? parseInt(m[0]) : 0; }
+  var out = {};
+  function put(p, n, l){
+    if (!(p > 0)) return;
+    var o = out[p] || { p: p, n: '', l: '' };
+    if (n && !o.n) o.n = n.replace(/\s+/g, ' ').trim();
+    if (l && !o.l) o.l = l;
+    out[p] = o;
+  }
   var btn = null;
   var els = document.querySelectorAll('button,a,span,div');
   for (var i = 0; i < els.length; i++) {
     var e = els[i];
     if (e.children.length > 2) continue;
-    var tx = (e.innerText || '').trim().toLowerCase();
+    var tx = (e.textContent || '').trim().toLowerCase();
     if (tx.length < 30 && (tx.indexOf('prikaži več') == 0 || tx.indexOf('prikazi vec') == 0 || tx.indexOf('prikaži vec') == 0) && e.offsetParent !== null) { btn = e; break; }
-  }
-  var set = {};
-  var cells = document.querySelectorAll('[data-label]');
-  for (var a = 0; a < cells.length; a++) {
-    if (/pozicija/i.test(cells[a].getAttribute('data-label'))) {
-      var n1 = parseInt((cells[a].innerText || '').replace(/\D/g, ''));
-      if (n1 > 0) set[n1] = 1;
-    }
   }
   var tables = document.querySelectorAll('table');
   for (var b = 0; b < tables.length; b++) {
-    var hs = tables[b].querySelectorAll('th'), idx = -1;
-    for (var j = 0; j < hs.length; j++) if (/pozicija/i.test(hs[j].innerText)) idx = j;
-    if (idx >= 0) {
-      var rows = tables[b].querySelectorAll('tr');
-      for (var r = 0; r < rows.length; r++) {
-        var c = rows[r].children[idx];
-        if (c && c.tagName == 'TD') {
-          var n2 = parseInt((c.innerText || '').replace(/\D/g, ''));
-          if (n2 > 0) set[n2] = 1;
-        }
-      }
+    var hs = tables[b].querySelectorAll('th'), ip = -1, ik = -1, il = -1;
+    for (var j = 0; j < hs.length; j++) {
+      var h = hs[j].textContent || '';
+      if (/pozicija/i.test(h)) ip = j;
+      else if (/kanal/i.test(h)) ik = j;
+      else if (/logo/i.test(h)) il = j;
+    }
+    if (ip < 0) continue;
+    var rows = tables[b].querySelectorAll('tr');
+    for (var r = 0; r < rows.length; r++) {
+      var td = rows[r].querySelectorAll('td');
+      if (td.length <= ip) continue;
+      put(num(td[ip].textContent), ik >= 0 && td[ik] ? td[ik].textContent : '', il >= 0 && td[il] ? imgOf(td[il]) : imgOf(rows[r]));
     }
   }
-  var re = /Pozicija\s*:?\s*(\d{1,4})/gi, m, txt = document.body.innerText;
-  while ((m = re.exec(txt)) !== null) set[parseInt(m[1])] = 1;
-  var list = Object.keys(set).map(Number);
+  var cand = document.body.querySelectorAll('div,li,article,section,tr');
+  for (var c = 0; c < cand.length; c++) {
+    var el = cand[c];
+    var tc = el.textContent || '';
+    if (tc.length > 600 || !/Pozicija/i.test(tc) || !/Kanal/i.test(tc)) continue;
+    var minimal = true;
+    for (var k = 0; k < el.children.length; k++) {
+      var ct = el.children[k].textContent || '';
+      if (/Pozicija/i.test(ct) && /Kanal/i.test(ct)) { minimal = false; break; }
+    }
+    if (!minimal) continue;
+    var t = el.innerText || tc;
+    var mp = t.match(/Pozicija\s*:?\s*(\d{1,4})/i);
+    var mk = t.match(/Kanal\s*:?\s*\n?\s*([^\n]+)/i);
+    put(mp ? parseInt(mp[1]) : 0, mk ? mk[1] : '', imgOf(el));
+  }
+  var list = Object.keys(out).map(function(k){ return out[k]; });
   if (btn) btn.click();
   return JSON.stringify({ more: !!btn, list: list });
 })()
@@ -1624,7 +1755,7 @@ fun SettingsScreen(s: AppState) {
                 else -> t.syncLast(
                     java.text.SimpleDateFormat("d. M. yyyy HH:mm", java.util.Locale.getDefault())
                         .format(java.util.Date(s.lastSync)),
-                    s.positions.size
+                    s.channels.size
                 )
             },
             color = LabelColor, fontSize = 14.sp
@@ -1635,6 +1766,12 @@ fun SettingsScreen(s: AppState) {
             enabled = !s.syncRunning,
             modifier = Modifier.fillMaxWidth()
         ) { Text(t.syncNow) }
+        OutlinedButton(
+            onClick = { s.showListDialog = true },
+            enabled = s.channels.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(t.showList) }
+        if (s.showListDialog) ListDialog(s)
         Text(t.kbTitle, style = MaterialTheme.typography.titleMedium)
         Text(t.kbMustMatch, color = DimColor, fontSize = 13.sp)
         LangPicker(s)
@@ -1950,10 +2087,11 @@ fun StatusBar(s: AppState) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                if (s.connected) t.connectedCh(s.channel) else s.status.ifEmpty { t.connecting },
-                Modifier
-                    .weight(1f)
-                    .clickable { s.showChannelDialog = true },
+                if (s.connected) t.connectedCh(s.channel) + (s.channelName(s.channel)?.let { "  ·  $it" } ?: "")
+                else s.status.ifEmpty { t.connecting },
+                Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 fontSize = 12.sp,
                 color = LabelColor
             )
@@ -2080,33 +2218,167 @@ fun SearchDock(s: AppState, modifier: Modifier) {
     }
 }
 
-/** Hiter popravek trenutnega programa. */
+/** Prikaz prebranega seznama programov (za preverjanje branja sheme). */
 @Composable
-fun ChannelDialog(s: AppState) {
+fun ListDialog(s: AppState) {
     val t = s.tr
-    var text by remember { mutableStateOf(s.channel.toString()) }
     AlertDialog(
-        onDismissRequest = { s.showChannelDialog = false },
-        title = { Text(t.setChTitle) },
+        onDismissRequest = { s.showListDialog = false },
+        title = { Text("${t.chTitle} (${s.channels.size})") },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.filter { c -> c.isDigit() }.take(4) },
-                label = { Text(t.setChLabel) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
+            LazyColumn(Modifier.height(420.dp)) {
+                itemsIndexed(s.channels) { _, c ->
+                    Text(
+                        "${c.pos}  ·  ${c.name.ifBlank { "?" }}  ·  logo ${if (c.logo.isNotBlank()) "✓" else "✗"}",
+                        fontSize = 13.sp,
+                        color = LabelColor,
+                        modifier = Modifier.padding(vertical = 3.dp)
+                    )
+                }
+            }
         },
         confirmButton = {
-            Button(onClick = {
-                text.toIntOrNull()?.let { if (it > 0) s.saveChannel(it) }
-                s.showChannelDialog = false
-            }) { Text(t.ok) }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = { s.showChannelDialog = false }) { Text(t.cancel) }
+            Button(onClick = { s.showListDialog = false }) { Text(t.close) }
         }
     )
+}
+
+/** Logotip kanala ali kratica, če logotipa ni. */
+@Composable
+fun ChLogo(s: AppState, c: Ch, fade: Float, h: Dp) {
+    val bmp = remember(c.logo, s.logoTick) { s.logoBitmap(c.logo) }
+    Box(
+        Modifier
+            .size(h * 1.5f, h)
+            .graphicsLayer { alpha = fade },
+        contentAlignment = Alignment.Center
+    ) {
+        if (bmp != null) {
+            Image(bmp, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF2A3140)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(initials(c.name), fontSize = 8.sp, color = TextColor, fontWeight = FontWeight.Medium, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Boben programov: vrtenje samo premika, tap preklopi. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
+    val t = s.tr
+    val list = s.channels
+    val rowH = 22.dp * k
+    val bg = Color(0xFF15181D)
+    val shape = RoundedCornerShape(16.dp)
+
+    if (list.isEmpty()) {
+        Box(
+            modifier.height(rowH * 7).clip(shape).background(bg).padding(10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                if (s.syncRunning) t.drumEmpty else t.syncNever,
+                fontSize = (12 * k).sp, color = DimColor, textAlign = TextAlign.Center
+            )
+        }
+        return
+    }
+
+    val state = rememberLazyListState()
+    val fling = rememberSnapFlingBehavior(state)
+    val curIdx = list.indexOfFirst { it.pos == s.channel }
+    LaunchedEffect(s.channel, list.size) {
+        if (curIdx >= 0) state.animateScrollToItem(curIdx)
+    }
+    val center by remember {
+        derivedStateOf {
+            val info = state.layoutInfo
+            val mid = (info.viewportStartOffset + info.viewportEndOffset) / 2
+            info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - mid) }?.index ?: 0
+        }
+    }
+
+    Box(modifier.height(rowH * 7).clip(shape).background(bg)) {
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp)
+                .height(rowH)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Color(0xFF16233A))
+                .border(1.5.dp, AccentColor, RoundedCornerShape(9.dp))
+        )
+        LazyColumn(
+            state = state,
+            flingBehavior = fling,
+            contentPadding = PaddingValues(vertical = rowH * 3),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            itemsIndexed(list) { i, c ->
+                val d = abs(i - center)
+                val col = when (d) {
+                    0 -> TextColor
+                    1 -> LabelColor
+                    else -> Color(0xFF5A616B)
+                }
+                val alpha = when (d) {
+                    0 -> 1f
+                    1 -> 0.75f
+                    else -> 0.45f
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(rowH)
+                        .clickable { s.pickChannel(c.pos) }
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "${c.pos}",
+                        Modifier.width(28.dp * k),
+                        fontSize = (12 * k).sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (c.pos == s.channel) GreenColor else col,
+                        textAlign = TextAlign.End
+                    )
+                    Spacer(Modifier.width(7.dp))
+                    ChLogo(s, c, alpha, 15.dp * k)
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        c.name,
+                        fontSize = (12 * k).sp,
+                        color = col,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(rowH * 1.6f)
+                .background(Brush.verticalGradient(listOf(bg, Color.Transparent)))
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(rowH * 1.6f)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, bg)))
+        )
+    }
 }
 
 // ---------- daljinec ----------
@@ -2122,7 +2394,7 @@ fun RemoteScreen(s: AppState) {
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.systemBars)
         ) {
-            val k = minOf(maxHeight / 840.dp, maxWidth / 360.dp).coerceIn(0.7f, 1.2f)
+            val k = minOf(maxHeight / 870.dp, maxWidth / 360.dp).coerceIn(0.7f, 1.2f)
             val key = 58.dp * k
             val big = 62.dp * k
             val small = 52.dp * k
@@ -2189,52 +2461,36 @@ fun RemoteScreen(s: AppState) {
                         }
                     }
 
-                    // glasnost, utišaj, program
+                    // glasnost in boben programov
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(gap),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(
-                            Modifier.weight(1f),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp * k)
                         ) {
                             RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
                                 Text("+", fontSize = (28 * k).sp, color = TextColor)
                             }
-                            RoundKey(small, onDown = { s.keyDown(25) }, onUp = { s.keyUp(25) }) {
+                            RoundKey(small, onDown = { s.volMinusDown() }, onUp = { s.volMinusUp() }) {
                                 Text("−", fontSize = (28 * k).sp, color = TextColor)
                             }
-                        }
-                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            RoundKey(big, onDown = { s.press(164) }) {
-                                MuteIcon(28.dp * k)
-                            }
+                            Text(t.volume, fontSize = (11 * k).sp, color = LabelColor)
                         }
                         Column(
                             Modifier.weight(1f),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp * k)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            RoundKey(small, onDown = { s.channelStep(1) }) {
-                                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = t.nextCh, modifier = Modifier.size(30.dp * k), tint = TextColor)
-                            }
-                            RoundKey(small, onDown = { s.channelStep(-1) }) {
-                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = t.prevCh, modifier = Modifier.size(30.dp * k), tint = TextColor)
-                            }
+                            ChannelDrum(s, k, Modifier.fillMaxWidth())
+                            Text(t.drumHint, fontSize = (11 * k).sp, color = LabelColor)
                         }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        Text(t.volume, Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
-                        Spacer(Modifier.weight(1f))
-                        Text(t.channel, Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
                     }
                 }
             }
         }
-
-        if (s.showChannelDialog) ChannelDialog(s)
 
         // iskalno polje nad tipkovnico (daljinec ostane pri miru)
         if (s.searchOpen) {
