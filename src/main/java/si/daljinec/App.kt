@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Build
+import android.media.AudioAttributes
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -152,7 +154,20 @@ object Haptics {
                 ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
             val amp = if (vib.hasAmplitudeControl()) 140 else VibrationEffect.DEFAULT_AMPLITUDE
-            vib.vibrate(VibrationEffect.createOneShot(18, amp))
+            val effect = VibrationEffect.createOneShot(18, amp)
+            // kot alarm: deluje tudi, če je "vibriranje ob dotiku" v telefonu izklopljeno
+            if (Build.VERSION.SDK_INT >= 33) {
+                vib.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+            } else {
+                @Suppress("DEPRECATION")
+                vib.vibrate(
+                    effect,
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+            }
         } catch (_: Exception) {}
     }
 }
@@ -584,7 +599,7 @@ class AppState(private val ctx: Context) {
     var busy by mutableStateOf(false)
     var channel by mutableStateOf(prefs.getInt("channel", 1))
     var channelList by mutableStateOf(prefs.getString("chlist", "") ?: "")
-    var stepDelay by mutableStateOf(prefs.getInt("step", 80))
+    var stepDelay by mutableStateOf(prefs.getInt("step", 30))
     var homeWait by mutableStateOf(prefs.getInt("home", 500))
     var screenWait by mutableStateOf(prefs.getInt("screen", 1000))
     var showSettings by mutableStateOf(false)
@@ -598,6 +613,14 @@ class AppState(private val ctx: Context) {
 
     init {
         Haptics.enabled = vibrate
+        // enkratna zamenjava stare privzete vrednosti 80 ms s 30 ms
+        if (!prefs.getBoolean("step30", false)) {
+            if (prefs.getInt("step", 30) == 80) {
+                prefs.edit().putInt("step", 30).apply()
+                stepDelay = 30
+            }
+            prefs.edit().putBoolean("step30", true).apply()
+        }
     }
 
     fun saveVibrate(on: Boolean) {
@@ -1058,7 +1081,7 @@ fun SettingsScreen(s: AppState) {
             onClick = {
                 s.saveChannelList(list)
                 s.saveTimings(
-                    (stepText.toIntOrNull() ?: 80).coerceIn(5, 1000),
+                    (stepText.toIntOrNull() ?: 30).coerceIn(5, 1000),
                     (homeText.toIntOrNull() ?: 500).coerceIn(50, 5000),
                     (screenText.toIntOrNull() ?: 1000).coerceIn(100, 5000)
                 )
