@@ -2,16 +2,23 @@ package si.daljinec
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,36 +54,41 @@ private val HID_DESCRIPTOR = intArrayOf(
     0xC0
 ).map { it.toByte() }.toByteArray()
 
-/** Preizkus: telefon kot Bluetooth daljinec za box. */
+/**
+ * Bluetooth daljinec (HID). Živi neodvisno od zaslona, da ostane registriran,
+ * tudi ko greš v nastavitve telefona (Android sicer registracijo prekliče).
+ */
 @SuppressLint("MissingPermission")
-class BtTestActivity : ComponentActivity() {
+object BtHid {
+    val log = mutableStateListOf<String>()
+    var status by mutableStateOf("Ni povezano")
+    val bonded = mutableStateListOf<BluetoothDevice>()
+
+    private var app: Context? = null
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
-    private val log = mutableStateListOf<String>()
-    private var status by mutableStateOf("Ni povezano")
-    private val bonded = mutableStateListOf<BluetoothDevice>()
-    private val cbExec = Executors.newSingleThreadExecutor()
-    private val sendExec = Executors.newSingleThreadExecutor()
-
-    private val adapter: BluetoothAdapter?
-        get() = (getSystemService(BLUETOOTH_SERVICE) as BluetoothManager).adapter
-
-    private val timeFmt = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
     private var wantedHost: BluetoothDevice? = null
     private var retries = 0
+    private var started = false
+    private val cbExec = Executors.newSingleThreadExecutor()
+    private val sendExec = Executors.newSingleThreadExecutor()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val timeFmt = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
 
-    private fun add(s: String) {
+    private val adapter: BluetoothAdapter?
+        get() = (app?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+
+    fun add(s: String) {
         val line = timeFmt.format(java.util.Date()) + "  " + s
-        runOnUiThread {
+        main.post {
             log.add(0, line)
             if (log.size > 40) log.removeAt(log.size - 1)
         }
     }
 
-    private fun name(d: BluetoothDevice): String = try { d.name ?: d.address } catch (_: Exception) { d.address }
+    private fun setStatus(s: String) = main.post { status = s }
 
-    private val permLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { start() }
+    fun name(d: BluetoothDevice): String = try { d.name ?: d.address } catch (_: Exception) { d.address }
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
@@ -88,19 +100,17 @@ class BtTestActivity : ComponentActivity() {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     host = device
-                    retries = 0
-                    runOnUiThread { status = "Povezano: ${name(device)}" }
+                    setStatus("Povezano: ${name(device)}")
                     add("Povezano: ${name(device)}")
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (host == device) host = null
-                    runOnUiThread { status = "Ni povezano" }
+                    setStatus("Ni povezano")
                     add("Prekinjeno: ${name(device)}")
-                    // samodejno: še dva poskusa ponovne povezave
                     if (device == wantedHost && retries < 2) {
                         retries++
                         Thread.sleep(1500)
-                        add("Ponovni poskus $retries…")
+                        add("Ponovni poskus $retries od 2…")
                         hid?.connect(device)
                     }
                 }
@@ -131,38 +141,15 @@ class BtTestActivity : ComponentActivity() {
         }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = AccentColor, background = ScreenColor, surface = ScreenColor)) {
-                Surface(Modifier.fillMaxSize(), color = ScreenColor) { Screen() }
-            }
-        }
-        val needed = if (Build.VERSION.SDK_INT >= 31)
-            listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE)
-        else listOf()
-        val missing = needed.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isEmpty()) start() else permLauncher.launch(missing.toTypedArray())
-    }
-
-    private fun register() {
-        val h = hid ?: run { add("Bluetooth storitev še ni pripravljena"); return }
-        try { h.unregisterApp() } catch (_: Exception) {}
-        val sdp = BluetoothHidDeviceAppSdpSettings(
-            "Daljinec", "Daljinec remote", "Daljinec",
-            BluetoothHidDevice.SUBCLASS1_COMBO, HID_DESCRIPTOR
-        )
-        val reg = h.registerApp(sdp, null, null, cbExec, callback)
-        add(if (reg) "Registracija poslana…" else "Registracija ni uspela")
-    }
-
-    private fun start() {
+    fun start(ctx: Context) {
+        app = ctx.applicationContext
+        refreshBonded()
+        if (started) return
         val a = adapter
         if (a == null) { add("Telefon nima Bluetootha"); return }
         if (!a.isEnabled) { add("Vklopi Bluetooth na telefonu in odpri preizkus znova"); return }
         try {
-            refreshBonded()
-            val ok = a.getProfileProxy(this, object : BluetoothProfile.ServiceListener {
+            val ok = a.getProfileProxy(app, object : BluetoothProfile.ServiceListener {
                 override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
                     hid = proxy as BluetoothHidDevice
                     register()
@@ -170,32 +157,35 @@ class BtTestActivity : ComponentActivity() {
 
                 override fun onServiceDisconnected(profile: Int) {
                     hid = null
+                    started = false
                     add("Bluetooth storitev prekinjena")
                 }
             }, BluetoothProfile.HID_DEVICE)
+            started = ok
             if (!ok) add("Telefon ne podpira Bluetooth daljinca (HID)")
         } catch (e: Exception) {
             add("Napaka: ${e.message}")
         }
     }
 
-    private fun refreshBonded() {
-        bonded.clear()
-        try { adapter?.bondedDevices?.let { bonded.addAll(it) } } catch (_: Exception) {}
+    fun register() {
+        val h = hid ?: run { add("Bluetooth storitev še ni pripravljena"); return }
+        val sdp = BluetoothHidDeviceAppSdpSettings(
+            "Daljinec", "Daljinec remote", "Daljinec",
+            BluetoothHidDevice.SUBCLASS1_COMBO, HID_DESCRIPTOR
+        )
+        val reg = h.registerApp(sdp, null, null, cbExec, callback)
+        add(if (reg) "Registracija poslana…" else "Registracija ni uspela (morda je že registriran)")
     }
 
-    private fun makeVisible() {
-        try {
-            startActivity(
-                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
-                    .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
-            )
-        } catch (e: Exception) {
-            add("Napaka: ${e.message}")
+    fun refreshBonded() {
+        main.post {
+            bonded.clear()
+            try { adapter?.bondedDevices?.let { bonded.addAll(it) } } catch (_: Exception) {}
         }
     }
 
-    private fun connectTo(d: BluetoothDevice) {
+    fun connectTo(d: BluetoothDevice) {
         val h = hid
         if (h == null) { add("Bluetooth daljinec še ni pripravljen"); return }
         wantedHost = d
@@ -204,7 +194,7 @@ class BtTestActivity : ComponentActivity() {
     }
 
     /** Tipka daljinca (consumer usage), npr. 0x9C = program gor. */
-    private fun consumer(usage: Int, label: String) {
+    fun consumer(usage: Int, label: String) {
         val h = hid
         val d = host
         if (h == null || d == null) { add("Ni povezave z boxom"); return }
@@ -217,7 +207,7 @@ class BtTestActivity : ComponentActivity() {
     }
 
     /** Tipka tipkovnice (HID usage), npr. 0x04 = A. */
-    private fun keyboard(usage: Int, label: String) {
+    fun keyboard(usage: Int, label: String) {
         val h = hid
         val d = host
         if (h == null || d == null) { add("Ni povezave z boxom"); return }
@@ -229,12 +219,90 @@ class BtTestActivity : ComponentActivity() {
         }
     }
 
-    override fun onDestroy() {
+    fun stop() {
         try {
             hid?.unregisterApp()
             adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hid)
         } catch (_: Exception) {}
-        super.onDestroy()
+        hid = null
+        host = null
+        started = false
+        setStatus("Ni povezano")
+        add("Ustavljeno")
+    }
+}
+
+/** Storitev v ospredju: drži aplikacijo "budno", da Android ne prekliče Bluetooth daljinca. */
+class BtKeepService : Service() {
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel("bt", "Bluetooth daljinec", NotificationManager.IMPORTANCE_LOW)
+        )
+        val n = Notification.Builder(this, "bt")
+            .setContentTitle("Daljinec")
+            .setContentText("Bluetooth daljinec je aktiven")
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setOngoing(true)
+            .build()
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(1, n)
+        }
+        BtHid.start(this)
+        return START_STICKY
+    }
+}
+
+/** Preizkus: telefon kot Bluetooth daljinec za box. */
+class BtTestActivity : ComponentActivity() {
+
+    private val permLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { begin() }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme(colorScheme = darkColorScheme(primary = AccentColor, background = ScreenColor, surface = ScreenColor)) {
+                Surface(Modifier.fillMaxSize(), color = ScreenColor) { Screen() }
+            }
+        }
+        val needed = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= 31) {
+            needed += Manifest.permission.BLUETOOTH_CONNECT
+            needed += Manifest.permission.BLUETOOTH_ADVERTISE
+        }
+        if (Build.VERSION.SDK_INT >= 33) needed += Manifest.permission.POST_NOTIFICATIONS
+        val missing = needed.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) begin() else permLauncher.launch(missing.toTypedArray())
+    }
+
+    private fun begin() {
+        try {
+            startForegroundService(Intent(this, BtKeepService::class.java))
+        } catch (e: Exception) {
+            BtHid.add("Storitve ni bilo mogoče zagnati: ${e.message}")
+            BtHid.start(this)
+        }
+    }
+
+    private fun makeVisible() {
+        try {
+            startActivity(
+                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                    .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
+            )
+        } catch (e: Exception) {
+            BtHid.add("Napaka: ${e.message}")
+        }
+    }
+
+    private fun stopAll() {
+        BtHid.stop()
+        stopService(Intent(this, BtKeepService::class.java))
     }
 
     @Composable
@@ -248,45 +316,46 @@ class BtTestActivity : ComponentActivity() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Bluetooth preizkus", style = MaterialTheme.typography.titleLarge, color = TextColor)
-            Text(status, color = if (status.startsWith("Povezano")) GreenColor else DimColor)
+            Text(BtHid.status, color = if (BtHid.status.startsWith("Povezano")) GreenColor else DimColor)
 
             Text("1. Seznanitev (samo prvič)", color = GlowColor)
             Button(onClick = { makeVisible() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Naj bo telefon viden (2 min)")
             }
             Text(
-                "Na boxu odpri Nastavitve → Daljinci in dodatki → Dodaj dodatek in izberi ta telefon. Potrdi kodo, če jo box pokaže.",
+                "Daljinec ostane aktiven tudi, ko zapustiš to aplikacijo (vidiš obvestilo). Seznani telefon z boxom prek Bluetooth menija telefona.",
                 color = LabelColor, fontSize = 14.sp
             )
 
-            Text("2. Povezava (če se ne poveže sam)", color = GlowColor)
-            OutlinedButton(onClick = { register() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Ponovno registriraj daljinec")
-            }
-            OutlinedButton(onClick = { refreshBonded() }, modifier = Modifier.fillMaxWidth()) {
+            Text("2. Povezava", color = GlowColor)
+            OutlinedButton(onClick = { BtHid.refreshBonded() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Osveži seznam seznanjenih naprav")
             }
-            bonded.forEach { d ->
-                OutlinedButton(onClick = { connectTo(d) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Poveži: ${name(d)}")
+            BtHid.bonded.forEach { d ->
+                OutlinedButton(onClick = { BtHid.connectTo(d) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Poveži: ${BtHid.name(d)}")
                 }
             }
 
             Text("3. Preizkus tipk (na TV-ju naj teče program)", color = GlowColor)
-            Button(onClick = { consumer(0x223, "Domov") }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { BtHid.consumer(0x223, "Domov") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Domov (preizkus povezave)")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { consumer(0x9C, "Program ▲") }, modifier = Modifier.weight(1f)) { Text("Program ▲") }
-                Button(onClick = { consumer(0x9D, "Program ▼") }, modifier = Modifier.weight(1f)) { Text("Program ▼") }
+                Button(onClick = { BtHid.consumer(0x9C, "Program ▲") }, modifier = Modifier.weight(1f)) { Text("Program ▲") }
+                Button(onClick = { BtHid.consumer(0x9D, "Program ▼") }, modifier = Modifier.weight(1f)) { Text("Program ▼") }
             }
-            Button(onClick = { keyboard(0x04, "Črka A") }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { BtHid.keyboard(0x04, "Črka A") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Črka A (preizkus tipkanja v iskanju)")
+            }
+
+            OutlinedButton(onClick = { stopAll() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Ustavi Bluetooth daljinec")
             }
 
             Spacer(Modifier.height(8.dp))
             Text("Dnevnik", color = GlowColor)
-            log.forEach { Text(it, color = Color(0xFFB0B6BE), fontSize = 13.sp) }
+            BtHid.log.forEach { Text(it, color = Color(0xFFB0B6BE), fontSize = 13.sp) }
         }
     }
 }
