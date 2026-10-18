@@ -138,6 +138,283 @@ val BodyBrush = Brush.verticalGradient(listOf(Color(0xFF0C0E10), Color(0xFF06070
 val KeyBrush = Brush.verticalGradient(listOf(Color(0xFF2C3138), Color(0xFF22262C)))
 val PowerBrush = Brush.verticalGradient(listOf(Color(0xFFE5484D), Color(0xFFB4232A)))
 
+// ---------- jezik aplikacije ----------
+
+/** Jezik telefona: sl, sr (tudi hr, bs, me) ali en. */
+fun systemLang(): String = when (java.util.Locale.getDefault().language) {
+    "sl" -> "sl"
+    "sr", "hr", "bs", "sh", "me", "cnr" -> "sr"
+    else -> "en"
+}
+
+class Tr(
+    val setupTitle: String,
+    val setupInfo: String,
+    val foundBoxes: String,
+    val ipLabel: String,
+    val pair: String,
+    val codeLabel: String,
+    val confirmCode: String,
+    val back: String,
+    val connecting: String,
+    val enterCode: String,
+    val error: String,
+    val noConnection: String,
+    val connLost: String,
+    val pairRejected: String,
+    val codeFormat: String,
+    val wrongCode: String,
+    val kbTitle: String,
+    val kbExplain: String,
+    val step1: String,
+    val step2: String,
+    val step2Text: (String) -> String,
+    val openLang: String,
+    val notConnected: String,
+    val done: String,
+    val up: String,
+    val down: String,
+    val left: String,
+    val right: String,
+    val settings: String,
+    val chExplain: String,
+    val chList: String,
+    val chEmpty: String,
+    val chCount: (Int) -> String,
+    val stepLabel: String,
+    val stepHint: String,
+    val homeLabel: String,
+    val homeHint: String,
+    val screenLabel: String,
+    val screenHint: String,
+    val kbMustMatch: String,
+    val kbSetOnBox: String,
+    val appLang: String,
+    val auto: String,
+    val vibrate: String,
+    val save: String,
+    val testTitle: String,
+    val testCode: String,
+    val send: String,
+    val sendHold: String,
+    val repair: String,
+    val pairBox: String,
+    val home: String,
+    val search: String,
+    val volume: String,
+    val channel: String,
+    val nextCh: String,
+    val prevCh: String,
+    val notPaired: String,
+    val connectedCh: (Int) -> String,
+    val searchHint: String,
+    val tapToType: String,
+    val ready: String,
+    val openingSearch: String,
+    val close: String
+)
+
+val TR = mapOf(
+    "sl" to Tr(
+        setupTitle = "Povezava z EON boxom",
+        setupInfo = "Telefon in box morata biti v istem Wi-Fi omrežju, box pa vklopljen.",
+        foundBoxes = "Najdeni boxi:",
+        ipLabel = "IP naslov boxa",
+        pair = "Upari",
+        codeLabel = "Koda s TV-ja (6 znakov)",
+        confirmCode = "Potrdi kodo",
+        back = "Nazaj",
+        connecting = "Povezujem…",
+        enterCode = "Vpiši kodo, ki je prikazana na TV-ju.",
+        error = "Napaka",
+        noConnection = "Ni povezave",
+        connLost = "Povezava prekinjena",
+        pairRejected = "Box je zavrnil uparjanje",
+        codeFormat = "Koda ima 6 znakov (0-9, A-F)",
+        wrongCode = "Napačna koda",
+        kbTitle = "Jezik tipkovnice za iskanje",
+        kbExplain = "Jezik v aplikaciji in jezik tipkovnice v iskanju na boxu se morata ujemati, sicer se vpisujejo napačne črke. Nastaviš samo enkrat.",
+        step1 = "1. V aplikaciji",
+        step2 = "2. Na boxu",
+        step2Text = { n -> "Tapni gumb spodaj. Na TV-ju se odpre seznam jezikov. S tipkami ▲ ▼ izberi $n in potrdi z OK." },
+        openLang = "Odpri izbiro jezika na TV",
+        notConnected = "Box ni povezan",
+        done = "Končano",
+        up = "Gor",
+        down = "Dol",
+        left = "Levo",
+        right = "Desno",
+        settings = "Nastavitve",
+        chExplain = "Vpiši programe, ki obstajajo, npr. 1-10, 12-45, 50. Prog ▲/▼ bosta preskočila manjkajoče. Prazno = vsi po vrsti.",
+        chList = "Seznam programov",
+        chEmpty = "Seznam je prazen (vsi programi po vrsti).",
+        chCount = { n -> "Prepoznanih programov: $n" },
+        stepLabel = "Premor med koraki pri iskanju (ms)",
+        stepHint = "Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.",
+        homeLabel = "Čakanje po Domov (ms)",
+        homeHint = "Koliko časa aplikacija počaka po Domov, preden pošlje ◀ (50–5000). Če iskanje ne odpre, ga povečaj.",
+        screenLabel = "Čakanje na odprtje iskanja (ms)",
+        screenHint = "Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.",
+        kbMustMatch = "Mora se ujemati z jezikom tipkovnice v iskanju na boxu.",
+        kbSetOnBox = "Nastavi jezik tudi na boxu",
+        appLang = "Jezik aplikacije",
+        auto = "Samodejno",
+        vibrate = "Vibriranje ob pritisku",
+        save = "Shrani",
+        testTitle = "Preizkus kode tipke",
+        testCode = "Test koda",
+        send = "Pošlji",
+        sendHold = "Pošlji (drži)",
+        repair = "Ponovno upari box",
+        pairBox = "Upari box",
+        home = "Domov",
+        search = "Išči",
+        volume = "Glasnost",
+        channel = "Program",
+        nextCh = "Naslednji program",
+        prevCh = "Prejšnji program",
+        notPaired = "Box ni uparjen  ·  Poveži",
+        connectedCh = { n -> "Povezano  ·  Program $n" },
+        searchHint = "Išči na TV",
+        tapToType = "Tapni sem za tipkanje",
+        ready = "Pripravljeno, tipkaj",
+        openingSearch = "Odpiram iskanje na TV…",
+        close = "Zapri"
+    ),
+    "en" to Tr(
+        setupTitle = "Connect to EON box",
+        setupInfo = "The phone and the box must be on the same Wi-Fi network, and the box must be on.",
+        foundBoxes = "Boxes found:",
+        ipLabel = "Box IP address",
+        pair = "Pair",
+        codeLabel = "Code from TV (6 characters)",
+        confirmCode = "Confirm code",
+        back = "Back",
+        connecting = "Connecting…",
+        enterCode = "Enter the code shown on the TV.",
+        error = "Error",
+        noConnection = "No connection",
+        connLost = "Connection lost",
+        pairRejected = "The box rejected pairing",
+        codeFormat = "The code has 6 characters (0-9, A-F)",
+        wrongCode = "Wrong code",
+        kbTitle = "Search keyboard language",
+        kbExplain = "The language in the app and the keyboard language in the box search must match, otherwise wrong letters are typed. You only set this once.",
+        step1 = "1. In the app",
+        step2 = "2. On the box",
+        step2Text = { n -> "Tap the button below. A list of languages opens on the TV. Use ▲ ▼ to select $n and confirm with OK." },
+        openLang = "Open language list on TV",
+        notConnected = "Box not connected",
+        done = "Done",
+        up = "Up",
+        down = "Down",
+        left = "Left",
+        right = "Right",
+        settings = "Settings",
+        chExplain = "Enter the channels that exist, e.g. 1-10, 12-45, 50. Channel ▲/▼ will skip the missing ones. Empty = all in order.",
+        chList = "Channel list",
+        chEmpty = "The list is empty (all channels in order).",
+        chCount = { n -> "Channels recognised: $n" },
+        stepLabel = "Delay between search steps (ms)",
+        stepHint = "Lower = faster typing (5–1000). If letters are missing, increase it.",
+        homeLabel = "Wait after Home (ms)",
+        homeHint = "How long the app waits after Home before sending ◀ (50–5000). If search doesn't open, increase it.",
+        screenLabel = "Wait for search to open (ms)",
+        screenHint = "How long the app waits after ◀ for EON to open search (100–5000). If the first letter is missing, increase it.",
+        kbMustMatch = "Must match the keyboard language in the box search.",
+        kbSetOnBox = "Set the language on the box too",
+        appLang = "App language",
+        auto = "Automatic",
+        vibrate = "Vibrate on press",
+        save = "Save",
+        testTitle = "Key code test",
+        testCode = "Test code",
+        send = "Send",
+        sendHold = "Send (hold)",
+        repair = "Pair box again",
+        pairBox = "Pair box",
+        home = "Home",
+        search = "Search",
+        volume = "Volume",
+        channel = "Channel",
+        nextCh = "Next channel",
+        prevCh = "Previous channel",
+        notPaired = "Box not paired  ·  Connect",
+        connectedCh = { n -> "Connected  ·  Channel $n" },
+        searchHint = "Search on TV",
+        tapToType = "Tap here to type",
+        ready = "Ready, start typing",
+        openingSearch = "Opening search on TV…",
+        close = "Close"
+    ),
+    "sr" to Tr(
+        setupTitle = "Povezivanje sa EON boksom",
+        setupInfo = "Telefon i boks moraju biti na istoj Wi-Fi mreži, a boks mora biti uključen.",
+        foundBoxes = "Pronađeni boksovi:",
+        ipLabel = "IP adresa boksa",
+        pair = "Upari",
+        codeLabel = "Kod sa TV-a (6 znakova)",
+        confirmCode = "Potvrdi kod",
+        back = "Nazad",
+        connecting = "Povezivanje…",
+        enterCode = "Unesi kod koji je prikazan na TV-u.",
+        error = "Greška",
+        noConnection = "Nema veze",
+        connLost = "Veza je prekinuta",
+        pairRejected = "Boks je odbio uparivanje",
+        codeFormat = "Kod ima 6 znakova (0-9, A-F)",
+        wrongCode = "Pogrešan kod",
+        kbTitle = "Jezik tastature za pretragu",
+        kbExplain = "Jezik u aplikaciji i jezik tastature u pretrazi na boksu moraju da se poklapaju, inače se unose pogrešna slova. Podešava se samo jednom.",
+        step1 = "1. U aplikaciji",
+        step2 = "2. Na boksu",
+        step2Text = { n -> "Dodirni dugme ispod. Na TV-u se otvara lista jezika. Tasterima ▲ ▼ izaberi $n i potvrdi sa OK." },
+        openLang = "Otvori izbor jezika na TV-u",
+        notConnected = "Boks nije povezan",
+        done = "Gotovo",
+        up = "Gore",
+        down = "Dole",
+        left = "Levo",
+        right = "Desno",
+        settings = "Podešavanja",
+        chExplain = "Unesi kanale koji postoje, npr. 1-10, 12-45, 50. Kanal ▲/▼ će preskočiti one kojih nema. Prazno = svi redom.",
+        chList = "Lista kanala",
+        chEmpty = "Lista je prazna (svi kanali redom).",
+        chCount = { n -> "Prepoznatih kanala: $n" },
+        stepLabel = "Pauza između koraka pri pretrazi (ms)",
+        stepHint = "Manji broj = brže kucanje (5–1000). Ako slova nedostaju, povećaj ga.",
+        homeLabel = "Čekanje posle Početne (ms)",
+        homeHint = "Koliko aplikacija čeka posle Početne pre nego što pošalje ◀ (50–5000). Ako se pretraga ne otvori, povećaj ga.",
+        screenLabel = "Čekanje na otvaranje pretrage (ms)",
+        screenHint = "Koliko aplikacija čeka posle ◀ da EON otvori pretragu (100–5000). Ako se prvo slovo ne unese, povećaj ga.",
+        kbMustMatch = "Mora da se poklapa sa jezikom tastature u pretrazi na boksu.",
+        kbSetOnBox = "Podesi jezik i na boksu",
+        appLang = "Jezik aplikacije",
+        auto = "Automatski",
+        vibrate = "Vibracija pri pritisku",
+        save = "Sačuvaj",
+        testTitle = "Test koda tastera",
+        testCode = "Test kod",
+        send = "Pošalji",
+        sendHold = "Pošalji (drži)",
+        repair = "Ponovo upari boks",
+        pairBox = "Upari boks",
+        home = "Početna",
+        search = "Traži",
+        volume = "Jačina",
+        channel = "Kanal",
+        nextCh = "Sledeći kanal",
+        prevCh = "Prethodni kanal",
+        notPaired = "Boks nije uparen  ·  Poveži",
+        connectedCh = { n -> "Povezano  ·  Kanal $n" },
+        searchHint = "Traži na TV-u",
+        tapToType = "Dodirni ovde za kucanje",
+        ready = "Spremno, kucaj",
+        openingSearch = "Otvaram pretragu na TV-u…",
+        close = "Zatvori"
+    )
+)
+
 // ---------- vibriranje (neodvisno od nastavitve tipkovnice) ----------
 
 object Haptics {
@@ -352,7 +629,7 @@ object Identity {
 
 // ---------- uparjanje (vrata 6467) ----------
 
-class Pairing(ctx: Context, private val host: String) {
+class Pairing(ctx: Context, private val host: String, private val tr: Tr) {
     private val ks = Identity.load(ctx)
     private val ssl = Identity.sslContext(ks)
     private var socket: SSLSocket? = null
@@ -369,10 +646,10 @@ class Pairing(ctx: Context, private val host: String) {
 
     private fun exchange(data: ByteArray): PbReader {
         Frames.write(out, data)
-        val resp = Frames.read(inp) ?: throw IllegalStateException("Povezava prekinjena")
+        val resp = Frames.read(inp) ?: throw IllegalStateException(tr.connLost)
         val r = PbReader(resp)
         val st = r.long(2) ?: 200L
-        if (st != 200L) throw IllegalStateException("Box je zavrnil uparjanje (status $st)")
+        if (st != 200L) throw IllegalStateException("${tr.pairRejected} ($st)")
         return r
     }
 
@@ -397,7 +674,7 @@ class Pairing(ctx: Context, private val host: String) {
 
     fun finish(code: String) {
         val c = code.trim().uppercase()
-        require(c.length == 6 && c.all { it in "0123456789ABCDEF" }) { "Koda ima 6 znakov (0-9, A-F)" }
+        require(c.length == 6 && c.all { it in "0123456789ABCDEF" }) { tr.codeFormat }
         val clientKey = ks.getCertificate("client").publicKey as RSAPublicKey
         val serverKey = socket!!.session.peerCertificates[0].publicKey as RSAPublicKey
         val md = MessageDigest.getInstance("SHA-256")
@@ -407,7 +684,7 @@ class Pairing(ctx: Context, private val host: String) {
         md.update(unsigned(serverKey.publicExponent))
         md.update(hex(c.substring(2)))
         val hash = md.digest()
-        require(hash[0] == c.substring(0, 2).toInt(16).toByte()) { "Napačna koda" }
+        require(hash[0] == c.substring(0, 2).toInt(16).toByte()) { tr.wrongCode }
         exchange(frame { msg(40, PbWriter().bytes(1, hash)) })
         close()
     }
@@ -619,7 +896,9 @@ class AppState(private val ctx: Context) {
     var searchReady by mutableStateOf(false)
     var ledTick by mutableStateOf(0)
     var vibrate by mutableStateOf(prefs.getBoolean("vib", true))
-    var kbLang by mutableStateOf(prefs.getString("kblang", "sl") ?: "sl")
+    var kbLang by mutableStateOf(prefs.getString("kblang", null) ?: systemLang())
+    var uiLangPref by mutableStateOf(prefs.getString("uilang", "auto") ?: "auto")
+    val tr: Tr get() = TR.getValue(if (uiLangPref == "auto") systemLang() else uiLangPref)
     var showLangSetup by mutableStateOf(paired && !prefs.getBoolean("langdone", false))
     val found = mutableStateListOf<Pair<String, String>>()
 
@@ -633,6 +912,11 @@ class AppState(private val ctx: Context) {
             }
             prefs.edit().putBoolean("step30", true).apply()
         }
+    }
+
+    fun saveUiLang(l: String) {
+        uiLangPref = l
+        prefs.edit().putString("uilang", l).apply()
     }
 
     fun saveKbLang(l: String) {
@@ -686,17 +970,17 @@ class AppState(private val ctx: Context) {
 
     fun startPairing() {
         busy = true
-        status = "Povezujem…"
+        status = tr.connecting
         net.execute {
             try {
                 pairing?.close()
-                val p = Pairing(ctx, host)
+                val p = Pairing(ctx, host, tr)
                 p.begin()
                 pairing = p
                 waitingCode = true
-                status = "Vpiši kodo, ki je prikazana na TV-ju."
+                status = tr.enterCode
             } catch (e: Exception) {
-                status = "Napaka: ${e.message}"
+                status = "${tr.error}: ${e.message}"
             }
             busy = false
         }
@@ -715,7 +999,7 @@ class AppState(private val ctx: Context) {
                 status = ""
                 connect()
             } catch (e: Exception) {
-                status = "Napaka: ${e.message}"
+                status = "${tr.error}: ${e.message}"
             }
             busy = false
         }
@@ -744,7 +1028,7 @@ class AppState(private val ctx: Context) {
                 try {
                     rc.run()
                 } catch (e: Exception) {
-                    status = "Ni povezave: ${e.message}"
+                    status = "${tr.noConnection}: ${e.message}"
                 }
                 if (running && g == gen) Thread.sleep(2000)
             }
@@ -996,6 +1280,7 @@ fun App(s: AppState) {
 @Composable
 fun SetupScreen(s: AppState) {
     val ctx = LocalContext.current
+    val t = s.tr
     var code by remember { mutableStateOf("") }
 
     BackHandler { s.showSetup = false }
@@ -1014,10 +1299,10 @@ fun SetupScreen(s: AppState) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Povezava z EON boxom", style = MaterialTheme.typography.titleLarge)
-        Text("Telefon in box morata biti v istem Wi-Fi omrežju, box pa vklopljen.")
+        Text(t.setupTitle, style = MaterialTheme.typography.titleLarge)
+        Text(t.setupInfo)
         if (s.found.isNotEmpty()) {
-            Text("Najdeni boxi:")
+            Text(t.foundBoxes)
             s.found.forEach { (name, ip) ->
                 OutlinedButton(onClick = { s.host = ip }, modifier = Modifier.fillMaxWidth()) {
                     Text("$name ($ip)")
@@ -1027,7 +1312,7 @@ fun SetupScreen(s: AppState) {
         OutlinedTextField(
             value = s.host,
             onValueChange = { s.host = it.trim() },
-            label = { Text("IP naslov boxa") },
+            label = { Text(t.ipLabel) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -1035,13 +1320,13 @@ fun SetupScreen(s: AppState) {
             onClick = { s.startPairing() },
             enabled = s.host.isNotEmpty() && !s.busy,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Upari") }
+        ) { Text(t.pair) }
 
         if (s.waitingCode) {
             OutlinedTextField(
                 value = code,
                 onValueChange = { code = it.uppercase().take(6) },
-                label = { Text("Koda s TV-ja (6 znakov)") },
+                label = { Text(t.codeLabel) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1049,42 +1334,53 @@ fun SetupScreen(s: AppState) {
                 onClick = { s.finishPairing(code) },
                 enabled = code.length == 6 && !s.busy,
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Potrdi kodo") }
+            ) { Text(t.confirmCode) }
         }
         if (s.status.isNotEmpty()) Text(s.status)
         OutlinedButton(
             onClick = { s.showSetup = false },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Nazaj") }
+        ) { Text(t.back) }
     }
 }
 
 // ---------- jezik tipkovnice ----------
 
+/** Vrsta okroglih gumbov za izbiro (izbrani je obarvan). */
 @Composable
-fun LangPicker(s: AppState) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        LANG_NAMES.forEach { (code, name) ->
-            val on = s.kbLang == code
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(if (on) Color(0xFF16233A) else Color.Transparent)
-                    .border(1.5.dp, if (on) AccentColor else Color(0xFF3A3F46), RoundedCornerShape(22.dp))
-                    .clickable { s.saveKbLang(code) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(name, fontSize = 14.sp, color = TextColor)
+fun Choices(options: List<Pair<String, String>>, selected: String, perRow: Int, onPick: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.chunked(perRow).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (code, name) ->
+                    val on = selected == code
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(if (on) Color(0xFF16233A) else Color.Transparent)
+                            .border(1.5.dp, if (on) AccentColor else Color(0xFF3A3F46), RoundedCornerShape(22.dp))
+                            .clickable { onPick(code) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(name, fontSize = 14.sp, color = TextColor)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
+fun LangPicker(s: AppState) {
+    Choices(LANG_NAMES, s.kbLang, 3) { s.saveKbLang(it) }
+}
+
+@Composable
 fun LangScreen(s: AppState) {
     BackHandler { s.finishLangSetup() }
+    val t = s.tr
     val name = LANG_NAMES.firstOrNull { it.first == s.kbLang }?.second ?: "Slovenščina"
 
     Column(
@@ -1095,42 +1391,36 @@ fun LangScreen(s: AppState) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Jezik tipkovnice za iskanje", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Jezik v aplikaciji in jezik tipkovnice v iskanju na boxu se morata ujemati, sicer se vpisujejo napačne črke. Nastaviš samo enkrat.",
-            color = LabelColor
-        )
-        Text("1. V aplikaciji", color = GlowColor, fontWeight = FontWeight.Medium)
+        Text(t.kbTitle, style = MaterialTheme.typography.titleLarge)
+        Text(t.kbExplain, color = LabelColor)
+        Text(t.step1, color = GlowColor, fontWeight = FontWeight.Medium)
         LangPicker(s)
-        Text("2. Na boxu", color = GlowColor, fontWeight = FontWeight.Medium)
-        Text(
-            "Tapni gumb spodaj. Na TV-ju se odpre seznam jezikov. S tipkami ▲ ▼ izberi $name in potrdi z OK.",
-            color = LabelColor
-        )
+        Text(t.step2, color = GlowColor, fontWeight = FontWeight.Medium)
+        Text(t.step2Text(name), color = LabelColor)
         OutlinedButton(
             onClick = { s.openLangOnTv() },
             enabled = s.connected,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (s.connected) "Odpri izbiro jezika na TV" else "Box ni povezan") }
+        ) { Text(if (s.connected) t.openLang else t.notConnected) }
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
         ) {
             RoundKey(52.dp, onDown = { s.press(19) }) {
-                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Gor", modifier = Modifier.size(28.dp), tint = TextColor)
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = t.up, modifier = Modifier.size(28.dp), tint = TextColor)
             }
             RoundKey(52.dp, onDown = { s.press(23) }, brush = Brush.verticalGradient(listOf(Color(0xFF5B9BFF), Color(0xFF2F6FE4)))) {
                 Text("OK", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
             RoundKey(52.dp, onDown = { s.press(20) }) {
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Dol", modifier = Modifier.size(28.dp), tint = TextColor)
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = t.down, modifier = Modifier.size(28.dp), tint = TextColor)
             }
         }
         Spacer(Modifier.height(4.dp))
         Button(
             onClick = { s.finishLangSetup() },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Končano") }
+        ) { Text(t.done) }
     }
 }
 
@@ -1144,6 +1434,7 @@ fun SettingsScreen(s: AppState) {
     var screenText by remember { mutableStateOf(s.screenWait.toString()) }
     var testCode by remember { mutableStateOf("") }
     val count = parseChannels(list).size
+    val t = s.tr
 
     BackHandler { s.showSettings = false }
 
@@ -1155,48 +1446,51 @@ fun SettingsScreen(s: AppState) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Nastavitve", style = MaterialTheme.typography.titleLarge)
-        Text("Vpiši programe, ki obstajajo, npr. 1-10, 12-45, 50. Prog ▲/▼ bosta preskočila manjkajoče. Prazno = vsi po vrsti.")
+        Text(t.settings, style = MaterialTheme.typography.titleLarge)
+        Text(t.appLang, style = MaterialTheme.typography.titleMedium)
+        Choices(listOf("auto" to t.auto) + LANG_NAMES, s.uiLangPref, 2) { s.saveUiLang(it) }
+        Spacer(Modifier.height(4.dp))
+        Text(t.chExplain)
         OutlinedTextField(
             value = list,
             onValueChange = { list = it },
-            label = { Text("Seznam programov") },
+            label = { Text(t.chList) },
             modifier = Modifier.fillMaxWidth()
         )
-        Text(if (count == 0) "Seznam je prazen (vsi programi po vrsti)." else "Prepoznanih programov: $count")
+        Text(if (count == 0) t.chEmpty else t.chCount(count))
         OutlinedTextField(
             value = stepText,
             onValueChange = { stepText = it.filter { c -> c.isDigit() }.take(4) },
-            label = { Text("Premor med koraki pri iskanju (ms)") },
+            label = { Text(t.stepLabel) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Text("Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        Text(t.stepHint, color = DimColor, fontSize = 13.sp)
         OutlinedTextField(
             value = homeText,
             onValueChange = { homeText = it.filter { c -> c.isDigit() }.take(4) },
-            label = { Text("Čakanje po Domov (ms)") },
+            label = { Text(t.homeLabel) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Text("Koliko časa aplikacija počaka po Domov, preden pošlje ◀ (50–5000). Če iskanje ne odpre, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        Text(t.homeHint, color = DimColor, fontSize = 13.sp)
         OutlinedTextField(
             value = screenText,
             onValueChange = { screenText = it.filter { c -> c.isDigit() }.take(4) },
-            label = { Text("Čakanje na odprtje iskanja (ms)") },
+            label = { Text(t.screenLabel) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Text("Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.", color = DimColor, fontSize = 13.sp)
-        Text("Jezik tipkovnice za iskanje", style = MaterialTheme.typography.titleMedium)
-        Text("Mora se ujemati z jezikom tipkovnice v iskanju na boxu.", color = DimColor, fontSize = 13.sp)
+        Text(t.screenHint, color = DimColor, fontSize = 13.sp)
+        Text(t.kbTitle, style = MaterialTheme.typography.titleMedium)
+        Text(t.kbMustMatch, color = DimColor, fontSize = 13.sp)
         LangPicker(s)
         OutlinedButton(
             onClick = { s.showLangSetup = true },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Nastavi jezik tudi na boxu") }
+        ) { Text(t.kbSetOnBox) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Vibriranje ob pritisku", Modifier.weight(1f))
+            Text(t.vibrate, Modifier.weight(1f))
             Switch(checked = s.vibrate, onCheckedChange = { s.saveVibrate(it) })
         }
         Button(
@@ -1210,14 +1504,14 @@ fun SettingsScreen(s: AppState) {
                 s.showSettings = false
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Shrani") }
+        ) { Text(t.save) }
         OutlinedButton(
             onClick = { s.showSettings = false },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Nazaj") }
+        ) { Text(t.back) }
 
         Spacer(Modifier.height(8.dp))
-        Text("Preizkus kode tipke", style = MaterialTheme.typography.titleMedium)
+        Text(t.testTitle, style = MaterialTheme.typography.titleMedium)
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1226,16 +1520,16 @@ fun SettingsScreen(s: AppState) {
             OutlinedTextField(
                 value = testCode,
                 onValueChange = { testCode = it.filter { c -> c.isDigit() }.take(3) },
-                label = { Text("Test koda") },
+                label = { Text(t.testCode) },
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
-            Button(onClick = { testCode.toIntOrNull()?.let { s.press(it) } }) { Text("Pošlji") }
+            Button(onClick = { testCode.toIntOrNull()?.let { s.press(it) } }) { Text(t.send) }
         }
         OutlinedButton(
             onClick = { testCode.toIntOrNull()?.let { s.holdPress(it) } },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Pošlji (drži)") }
+        ) { Text(t.sendHold) }
 
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
@@ -1244,7 +1538,7 @@ fun SettingsScreen(s: AppState) {
                 s.resetPairing()
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (s.paired) "Ponovno upari box" else "Upari box") }
+        ) { Text(if (s.paired) t.repair else t.pairBox) }
     }
 }
 
@@ -1381,6 +1675,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
     val ry = remember { Animatable(0f) }
     val okScale = remember { Animatable(1f) }
     var lit by remember { mutableStateOf(-1) } // 0 gor, 1 desno, 2 dol, 3 levo
+    val t = s.tr
 
     Box(
         Modifier
@@ -1431,10 +1726,10 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                 })
             }
     ) {
-        Arrow(Icons.Filled.KeyboardArrowUp, "Gor", lit == 0, Modifier.align(Alignment.TopCenter).padding(top = 10.dp * k), k)
-        Arrow(Icons.Filled.KeyboardArrowDown, "Dol", lit == 2, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp * k), k)
-        Arrow(Icons.Filled.KeyboardArrowLeft, "Levo", lit == 3, Modifier.align(Alignment.CenterStart).padding(start = 10.dp * k), k)
-        Arrow(Icons.Filled.KeyboardArrowRight, "Desno", lit == 1, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowUp, t.up, lit == 0, Modifier.align(Alignment.TopCenter).padding(top = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowDown, t.down, lit == 2, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowLeft, t.left, lit == 3, Modifier.align(Alignment.CenterStart).padding(start = 10.dp * k), k)
+        Arrow(Icons.Filled.KeyboardArrowRight, t.right, lit == 1, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp * k), k)
         Box(
             Modifier
                 .align(Alignment.Center)
@@ -1456,6 +1751,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
 /** Lučka, ki utripne ob vsakem pošiljanju, in vrstica stanja. */
 @Composable
 fun StatusBar(s: AppState) {
+    val t = s.tr
     val a = remember { Animatable(0f) }
     val b = remember { Animatable(0f) }
     LaunchedEffect(s.ledTick) {
@@ -1487,7 +1783,7 @@ fun StatusBar(s: AppState) {
         Spacer(Modifier.width(8.dp))
         if (!s.paired) {
             Text(
-                "Box ni uparjen  ·  Poveži",
+                t.notPaired,
                 Modifier
                     .weight(1f)
                     .clickable { s.showSetup = true },
@@ -1502,14 +1798,14 @@ fun StatusBar(s: AppState) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                if (s.connected) "Povezano  ·  Program ${s.channel}" else s.status.ifEmpty { "Povezujem…" },
+                if (s.connected) t.connectedCh(s.channel) else s.status.ifEmpty { t.connecting },
                 Modifier.weight(1f),
                 fontSize = 12.sp,
                 color = LabelColor
             )
         }
         IconButton(onClick = { s.showSettings = true }) {
-            Icon(Icons.Filled.Settings, contentDescription = "Nastavitve", tint = DimColor)
+            Icon(Icons.Filled.Settings, contentDescription = t.settings, tint = DimColor)
         }
     }
 }
@@ -1521,6 +1817,7 @@ fun SearchDock(s: AppState, modifier: Modifier) {
     val focus = remember { FocusRequester() }
     val kb = LocalSoftwareKeyboardController.current
     var focused by remember { mutableStateOf(false) }
+    val t = s.tr
 
     fun grab() {
         try { focus.requestFocus() } catch (_: Exception) {}
@@ -1586,7 +1883,7 @@ fun SearchDock(s: AppState, modifier: Modifier) {
                 decorationBox = { inner ->
                     Box {
                         if (s.searchText.isEmpty()) {
-                            Text("Išči na TV", color = DimColor, fontSize = 17.sp)
+                            Text(t.searchHint, color = DimColor, fontSize = 17.sp)
                         }
                         inner()
                     }
@@ -1594,9 +1891,9 @@ fun SearchDock(s: AppState, modifier: Modifier) {
             )
             Text(
                 when {
-                    !focused -> "Tapni sem za tipkanje"
-                    s.searchReady -> "Pripravljeno, tipkaj"
-                    else -> "Odpiram iskanje na TV…"
+                    !focused -> t.tapToType
+                    s.searchReady -> t.ready
+                    else -> t.openingSearch
                 },
                 color = when {
                     !focused -> Color(0xFFFBBF24)
@@ -1624,7 +1921,7 @@ fun SearchDock(s: AppState, modifier: Modifier) {
                 ) { s.closeSearch() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "Zapri", tint = DimColor)
+            Icon(Icons.Filled.Close, contentDescription = t.close, tint = DimColor)
         }
     }
 }
@@ -1633,6 +1930,7 @@ fun SearchDock(s: AppState, modifier: Modifier) {
 
 @Composable
 fun RemoteScreen(s: AppState) {
+    val t = s.tr
     BackHandler(enabled = s.searchOpen) { s.closeSearch() }
 
     Box(Modifier.fillMaxSize().background(ScreenColor)) {
@@ -1696,14 +1994,14 @@ fun RemoteScreen(s: AppState) {
                     // nazaj, domov, išči
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            RoundKey(big, onDown = { s.press(4) }) { IconLabel(Icons.Filled.ArrowBack, "Nazaj", k) }
+                            RoundKey(big, onDown = { s.press(4) }) { IconLabel(Icons.Filled.ArrowBack, t.back, k) }
                         }
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            RoundKey(big, onDown = { s.press(3) }) { IconLabel(Icons.Filled.Home, "Domov", k) }
+                            RoundKey(big, onDown = { s.press(3) }) { IconLabel(Icons.Filled.Home, t.home, k) }
                         }
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             RoundKey(big, onDown = { s.openSearchUi() }) {
-                                IconLabel(Icons.Filled.Search, "Išči", k, tint = GlowColor)
+                                IconLabel(Icons.Filled.Search, t.search, k, tint = GlowColor)
                             }
                         }
                     }
@@ -1737,17 +2035,17 @@ fun RemoteScreen(s: AppState) {
                             verticalArrangement = Arrangement.spacedBy(8.dp * k)
                         ) {
                             RoundKey(small, onDown = { s.channelStep(1) }) {
-                                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Naslednji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
+                                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = t.nextCh, modifier = Modifier.size(30.dp * k), tint = TextColor)
                             }
                             RoundKey(small, onDown = { s.channelStep(-1) }) {
-                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Prejšnji program", modifier = Modifier.size(30.dp * k), tint = TextColor)
+                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = t.prevCh, modifier = Modifier.size(30.dp * k), tint = TextColor)
                             }
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        Text("Glasnost", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
+                        Text(t.volume, Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
                         Spacer(Modifier.weight(1f))
-                        Text("Program", Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
+                        Text(t.channel, Modifier.weight(1f), fontSize = (11 * k).sp, color = LabelColor, textAlign = TextAlign.Center)
                     }
                 }
             }
