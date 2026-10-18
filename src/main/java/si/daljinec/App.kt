@@ -1164,12 +1164,12 @@ fun RoundKey(
 
 /** Simbol za vklop: krog z odprtino zgoraj in navpično črto. */
 @Composable
-fun PowerIcon(size: Dp) {
+fun PowerIcon(size: Dp, color: Color = Color(0xFFEF4444)) {
     Canvas(Modifier.size(size)) {
         val sw = this.size.width * 0.12f
         val pad = sw
         drawArc(
-            color = Color.White,
+            color = color,
             startAngle = -60f,
             sweepAngle = 300f,
             useCenter = false,
@@ -1178,12 +1178,34 @@ fun PowerIcon(size: Dp) {
             style = Stroke(width = sw, cap = StrokeCap.Round)
         )
         drawLine(
-            color = Color.White,
+            color = color,
             start = Offset(center.x, pad * 0.4f),
             end = Offset(center.x, center.y),
             strokeWidth = sw,
             cap = StrokeCap.Round
         )
+    }
+}
+
+/** Simbol za utišanje: zvočnik in prečrtan X. */
+@Composable
+fun MuteIcon(size: Dp, color: Color = TextColor) {
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val speaker = androidx.compose.ui.graphics.Path().apply {
+            moveTo(w * 0.10f, h * 0.36f)
+            lineTo(w * 0.28f, h * 0.36f)
+            lineTo(w * 0.52f, h * 0.16f)
+            lineTo(w * 0.52f, h * 0.84f)
+            lineTo(w * 0.28f, h * 0.64f)
+            lineTo(w * 0.10f, h * 0.64f)
+            close()
+        }
+        drawPath(speaker, color)
+        val sw = w * 0.09f
+        drawLine(color, Offset(w * 0.66f, h * 0.36f), Offset(w * 0.90f, h * 0.64f), sw, StrokeCap.Round)
+        drawLine(color, Offset(w * 0.90f, h * 0.36f), Offset(w * 0.66f, h * 0.64f), sw, StrokeCap.Round)
     }
 }
 
@@ -1485,7 +1507,7 @@ fun RemoteScreen(s: AppState) {
                 ) {
                     // vklop/izklop
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        RoundKey(48.dp * k, onDown = { s.press(26) }, brush = PowerBrush) {
+                        RoundKey(48.dp * k, onDown = { s.press(26) }) {
                             PowerIcon(22.dp * k)
                         }
                     }
@@ -1552,7 +1574,7 @@ fun RemoteScreen(s: AppState) {
                         }
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             RoundKey(big, onDown = { s.press(164) }) {
-                                Text("🔇", fontSize = (22 * k).sp)
+                                MuteIcon(28.dp * k)
                             }
                         }
                         Column(
