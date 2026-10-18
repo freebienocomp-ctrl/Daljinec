@@ -37,6 +37,8 @@ private val HID_DESCRIPTOR = intArrayOf(
     0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x85, 0x01,
     0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02,
     0x95, 0x01, 0x75, 0x08, 0x81, 0x01,
+    0x95, 0x05, 0x75, 0x01, 0x05, 0x08, 0x19, 0x01, 0x29, 0x05, 0x91, 0x02,
+    0x95, 0x01, 0x75, 0x03, 0x91, 0x01,
     0x95, 0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0x65, 0x05, 0x07, 0x19, 0x00, 0x29, 0x65, 0x81, 0x00,
     0xC0,
     // daljinec (consumer control)
@@ -59,9 +61,16 @@ class BtTestActivity : ComponentActivity() {
     private val adapter: BluetoothAdapter?
         get() = (getSystemService(BLUETOOTH_SERVICE) as BluetoothManager).adapter
 
-    private fun add(s: String) = runOnUiThread {
-        log.add(0, s)
-        if (log.size > 30) log.removeAt(log.size - 1)
+    private val timeFmt = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
+    private var wantedHost: BluetoothDevice? = null
+    private var retries = 0
+
+    private fun add(s: String) {
+        val line = timeFmt.format(java.util.Date()) + "  " + s
+        runOnUiThread {
+            log.add(0, line)
+            if (log.size > 40) log.removeAt(log.size - 1)
+        }
     }
 
     private fun name(d: BluetoothDevice): String = try { d.name ?: d.address } catch (_: Exception) { d.address }
@@ -79,6 +88,7 @@ class BtTestActivity : ComponentActivity() {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     host = device
+                    retries = 0
                     runOnUiThread { status = "Povezano: ${name(device)}" }
                     add("Povezano: ${name(device)}")
                 }
@@ -86,13 +96,38 @@ class BtTestActivity : ComponentActivity() {
                     if (host == device) host = null
                     runOnUiThread { status = "Ni povezano" }
                     add("Prekinjeno: ${name(device)}")
+                    // samodejno: še dva poskusa ponovne povezave
+                    if (device == wantedHost && retries < 2) {
+                        retries++
+                        Thread.sleep(1500)
+                        add("Ponovni poskus $retries…")
+                        hid?.connect(device)
+                    }
                 }
                 BluetoothProfile.STATE_CONNECTING -> add("Povezujem: ${name(device)}…")
             }
         }
 
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
+            add("Box zahteva poročilo (tip $type, id $id)")
             hid?.replyReport(device, type, id, ByteArray(if (id.toInt() == 2) 2 else 8))
+        }
+
+        override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
+            add("Box pošilja poročilo (tip $type, id $id)")
+            hid?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
+        }
+
+        override fun onSetProtocol(device: BluetoothDevice, protocol: Byte) {
+            add("Box nastavlja protokol: $protocol")
+        }
+
+        override fun onInterruptData(device: BluetoothDevice, reportId: Byte, data: ByteArray) {
+            add("Box pošilja podatke (id $reportId)")
+        }
+
+        override fun onVirtualCableUnplug(device: BluetoothDevice) {
+            add("Box je odklopil daljinec (virtual cable unplug)")
         }
     }
 
@@ -110,6 +145,17 @@ class BtTestActivity : ComponentActivity() {
         if (missing.isEmpty()) start() else permLauncher.launch(missing.toTypedArray())
     }
 
+    private fun register() {
+        val h = hid ?: run { add("Bluetooth storitev še ni pripravljena"); return }
+        try { h.unregisterApp() } catch (_: Exception) {}
+        val sdp = BluetoothHidDeviceAppSdpSettings(
+            "Daljinec", "Daljinec remote", "Daljinec",
+            BluetoothHidDevice.SUBCLASS1_COMBO, HID_DESCRIPTOR
+        )
+        val reg = h.registerApp(sdp, null, null, cbExec, callback)
+        add(if (reg) "Registracija poslana…" else "Registracija ni uspela")
+    }
+
     private fun start() {
         val a = adapter
         if (a == null) { add("Telefon nima Bluetootha"); return }
@@ -118,14 +164,8 @@ class BtTestActivity : ComponentActivity() {
             refreshBonded()
             val ok = a.getProfileProxy(this, object : BluetoothProfile.ServiceListener {
                 override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-                    val h = proxy as BluetoothHidDevice
-                    hid = h
-                    val sdp = BluetoothHidDeviceAppSdpSettings(
-                        "Daljinec", "Daljinec remote", "Daljinec",
-                        BluetoothHidDevice.SUBCLASS1_COMBO, HID_DESCRIPTOR
-                    )
-                    val reg = h.registerApp(sdp, null, null, cbExec, callback)
-                    add(if (reg) "Registracija poslana…" else "Registracija ni uspela")
+                    hid = proxy as BluetoothHidDevice
+                    register()
                 }
 
                 override fun onServiceDisconnected(profile: Int) {
@@ -158,6 +198,8 @@ class BtTestActivity : ComponentActivity() {
     private fun connectTo(d: BluetoothDevice) {
         val h = hid
         if (h == null) { add("Bluetooth daljinec še ni pripravljen"); return }
+        wantedHost = d
+        retries = 0
         add(if (h.connect(d)) "Povezujem z ${name(d)}…" else "Povezava z ${name(d)} ni uspela")
     }
 
@@ -218,6 +260,9 @@ class BtTestActivity : ComponentActivity() {
             )
 
             Text("2. Povezava (če se ne poveže sam)", color = GlowColor)
+            OutlinedButton(onClick = { register() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Ponovno registriraj daljinec")
+            }
             OutlinedButton(onClick = { refreshBonded() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Osveži seznam seznanjenih naprav")
             }
