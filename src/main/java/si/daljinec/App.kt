@@ -559,26 +559,36 @@ fun parseChannels(t: String): List<Int> {
 
 // ---------- EON tipkovnica ----------
 
-/** Vrstice 1-5 EON tipkovnice, vsaka ima 6 stolpcev. */
-val EON_ROWS = listOf(
-    "ABCČDE",
-    "FGHIJK",
-    "LMNOPR",
-    "SŠTUVZ",
-    "Ž:;.,-"
+/** Vrstice 1-5 EON tipkovnice za vsak jezik, vsaka ima 6 stolpcev.
+ *  Pri srbski so Dž, Lj in Nj označene s posebnimi znaki (aplikacija jih ne uporablja,
+ *  "lj" vpiše kot L + J). */
+val EON_LAYOUTS = mapOf(
+    "sl" to listOf("ABCČDE", "FGHIJK", "LMNOPR", "SŠTUVZ", "Ž:;.,-"),
+    "en" to listOf("ABCDEF", "GHIJKL", "MNOPQR", "STUVWX", "YZ.,-@"),
+    "sr" to listOf("ABCČĆD", "\u0001ĐEFGH", "IJKL\u0002M", "N\u0003OPRS", "ŠTUVZŽ")
+)
+
+val LANG_NAMES = listOf("sl" to "Slovenščina", "en" to "English", "sr" to "Srpski")
+
+/** Če črke ni na tipkovnici, poskusi podobno (npr. Č -> C v angleščini). */
+private val EON_ALT = mapOf(
+    'Ć' to "ČC",
+    'Č' to "C",
+    'Đ' to "D",
+    'Š' to "S",
+    'Ž' to "Z"
 )
 
 /** Vrne (vrstica, stolpec) za znak, (-1, -1) za presledek ali null, če znaka ni. */
-fun eonPos(ch: Char): Pair<Int, Int>? {
-    val c = when (val u = ch.uppercaseChar()) {
-        'Ć' -> 'Č'
-        'Đ' -> 'D'
-        else -> u
-    }
-    if (c == ' ') return Pair(-1, -1)
-    EON_ROWS.forEachIndexed { r, row ->
-        val col = row.indexOf(c)
-        if (col >= 0) return Pair(r + 1, col)
+fun eonPos(ch: Char, lang: String): Pair<Int, Int>? {
+    val rows = EON_LAYOUTS[lang] ?: EON_LAYOUTS.getValue("sl")
+    val u = ch.uppercaseChar()
+    if (u == ' ') return Pair(-1, -1)
+    for (c in "$u" + (EON_ALT[u] ?: "")) {
+        rows.forEachIndexed { r, row ->
+            val col = row.indexOf(c)
+            if (col >= 0) return Pair(r + 1, col)
+        }
     }
     return null
 }
@@ -609,6 +619,8 @@ class AppState(private val ctx: Context) {
     var searchReady by mutableStateOf(false)
     var ledTick by mutableStateOf(0)
     var vibrate by mutableStateOf(prefs.getBoolean("vib", true))
+    var kbLang by mutableStateOf(prefs.getString("kblang", "sl") ?: "sl")
+    var showLangSetup by mutableStateOf(paired && !prefs.getBoolean("langdone", false))
     val found = mutableStateListOf<Pair<String, String>>()
 
     init {
@@ -620,6 +632,31 @@ class AppState(private val ctx: Context) {
                 stepDelay = 30
             }
             prefs.edit().putBoolean("step30", true).apply()
+        }
+    }
+
+    fun saveKbLang(l: String) {
+        kbLang = l
+        prefs.edit().putString("kblang", l).apply()
+    }
+
+    /** Končano na zaslonu za jezik. */
+    fun finishLangSetup() {
+        prefs.edit().putBoolean("langdone", true).apply()
+        showLangSetup = false
+    }
+
+    /** Odpre iskanje na TV-ju in pritisne gumb za jezik, da se pokaže seznam jezikov. */
+    fun openLangOnTv() {
+        closeSearch()
+        ledTick++
+        keys.execute {
+            kbOpen = false
+            openSearchIfNeeded()   // izbrana je črka A
+            step(19, 250)          // gor -> mikrofon
+            step(22, 250)          // desno -> jezik
+            step(23)               // OK -> seznam jezikov
+            kbOpen = false         // po izbiri jezika začnemo iskanje znova
         }
     }
 
@@ -674,6 +711,7 @@ class AppState(private val ctx: Context) {
                 waitingCode = false
                 paired = true
                 showSetup = false
+                if (!prefs.getBoolean("langdone", false)) showLangSetup = true
                 status = ""
                 connect()
             } catch (e: Exception) {
@@ -831,8 +869,9 @@ class AppState(private val ctx: Context) {
         searchText = n
         var common = 0
         while (common < old.length && common < n.length && old[common] == n[common]) common++
-        val delCount = old.substring(common).count { eonPos(it) != null }
-        val add = n.substring(common).mapNotNull { eonPos(it) }
+        val lang = kbLang
+        val delCount = old.substring(common).count { eonPos(it, lang) != null }
+        val add = n.substring(common).mapNotNull { eonPos(it, lang) }
         if (delCount == 0 && add.isEmpty()) return
         keys.execute { typeOnTv(delCount, add) }
     }
@@ -946,6 +985,7 @@ class MainActivity : ComponentActivity() {
 fun App(s: AppState) {
     when {
         s.showSetup -> SetupScreen(s)
+        s.showLangSetup -> LangScreen(s)
         s.showSettings -> SettingsScreen(s)
         else -> RemoteScreen(s)
     }
@@ -1019,6 +1059,81 @@ fun SetupScreen(s: AppState) {
     }
 }
 
+// ---------- jezik tipkovnice ----------
+
+@Composable
+fun LangPicker(s: AppState) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LANG_NAMES.forEach { (code, name) ->
+            val on = s.kbLang == code
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(if (on) Color(0xFF16233A) else Color.Transparent)
+                    .border(1.5.dp, if (on) AccentColor else Color(0xFF3A3F46), RoundedCornerShape(22.dp))
+                    .clickable { s.saveKbLang(code) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(name, fontSize = 14.sp, color = TextColor)
+            }
+        }
+    }
+}
+
+@Composable
+fun LangScreen(s: AppState) {
+    BackHandler { s.finishLangSetup() }
+    val name = LANG_NAMES.firstOrNull { it.first == s.kbLang }?.second ?: "Slovenščina"
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Jezik tipkovnice za iskanje", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Jezik v aplikaciji in jezik tipkovnice v iskanju na boxu se morata ujemati, sicer se vpisujejo napačne črke. Nastaviš samo enkrat.",
+            color = LabelColor
+        )
+        Text("1. V aplikaciji", color = GlowColor, fontWeight = FontWeight.Medium)
+        LangPicker(s)
+        Text("2. Na boxu", color = GlowColor, fontWeight = FontWeight.Medium)
+        Text(
+            "Tapni gumb spodaj. Na TV-ju se odpre seznam jezikov. S tipkami ▲ ▼ izberi $name in potrdi z OK.",
+            color = LabelColor
+        )
+        OutlinedButton(
+            onClick = { s.openLangOnTv() },
+            enabled = s.connected,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (s.connected) "Odpri izbiro jezika na TV" else "Box ni povezan") }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+        ) {
+            RoundKey(52.dp, onDown = { s.press(19) }) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Gor", modifier = Modifier.size(28.dp), tint = TextColor)
+            }
+            RoundKey(52.dp, onDown = { s.press(23) }, brush = Brush.verticalGradient(listOf(Color(0xFF5B9BFF), Color(0xFF2F6FE4)))) {
+                Text("OK", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
+            RoundKey(52.dp, onDown = { s.press(20) }) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Dol", modifier = Modifier.size(28.dp), tint = TextColor)
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Button(
+            onClick = { s.finishLangSetup() },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Končano") }
+    }
+}
+
 // ---------- nastavitve ----------
 
 @Composable
@@ -1073,6 +1188,13 @@ fun SettingsScreen(s: AppState) {
             modifier = Modifier.fillMaxWidth()
         )
         Text("Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.", color = DimColor, fontSize = 13.sp)
+        Text("Jezik tipkovnice za iskanje", style = MaterialTheme.typography.titleMedium)
+        Text("Mora se ujemati z jezikom tipkovnice v iskanju na boxu.", color = DimColor, fontSize = 13.sp)
+        LangPicker(s)
+        OutlinedButton(
+            onClick = { s.showLangSetup = true },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Nastavi jezik tudi na boxu") }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Vibriranje ob pritisku", Modifier.weight(1f))
             Switch(checked = s.vibrate, onCheckedChange = { s.saveVibrate(it) })
@@ -1484,6 +1606,15 @@ fun SearchDock(s: AppState, modifier: Modifier) {
                 fontSize = 10.sp
             )
         }
+        Text(
+            s.kbLang.uppercase(),
+            Modifier
+                .border(1.dp, AccentColor, RoundedCornerShape(6.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+            color = ArrowLit,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
         Box(
             Modifier
                 .size(58.dp)
