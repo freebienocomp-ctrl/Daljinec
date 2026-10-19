@@ -2382,7 +2382,14 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
     val state = rememberLazyListState()
     val fling = rememberSnapFlingBehavior(state)
     val curIdx = list.indexOfFirst { it.pos == s.channel }
+    // ob odprtju je boben čisto na vrhu (vidi se cela tipka TV v živo),
+    // pri menjavi programa pa se zavrti na izbrani program
+    var firstRun by remember { mutableStateOf(true) }
     LaunchedEffect(s.channel, list.size) {
+        if (firstRun) {
+            firstRun = false
+            return@LaunchedEffect
+        }
         if (curIdx >= 0) state.animateScrollToItem(curIdx)
     }
     val center by remember {
@@ -2401,10 +2408,10 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
         }
     }
 
+    Box(modifier.height(rowH * 7).clipToBounds()) {
     Box(
-        modifier
-            .height(rowH * 7)
-            .clipToBounds()
+        Modifier
+            .fillMaxSize()
             // zgoraj in spodaj programi postopno izginejo v ozadje daljinca
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
@@ -2484,7 +2491,8 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
                 }
             }
         }
-        // nad prvim programom: tipka TV v živo in število programov (ob vrtenju zdrsne gor v temo)
+    }
+        // nad prvim programom: tipka TV v živo (ni zatemnjena, ob vrtenju zdrsne gor)
         firstY?.let { y ->
             BoxWithConstraints(
                 Modifier
@@ -2498,15 +2506,13 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    RoundKey(rowH * 1.85f, onDown = { s.openLiveTv() }, width = keyW) {
+                    RoundKey(52.dp * k, onDown = { s.openLiveTv() }, width = keyW) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TvIcon(18.dp * k)
                             Spacer(Modifier.width(8.dp))
                             Text(t.liveTv, fontSize = (14 * k).sp, fontWeight = FontWeight.Medium, color = TextColor)
                         }
                     }
-                    Spacer(Modifier.height(3.dp))
-                    Text(t.chCount(list.size), fontSize = (10 * k).sp, color = DimColor)
                 }
             }
         }
