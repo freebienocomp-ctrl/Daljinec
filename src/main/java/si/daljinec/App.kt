@@ -99,6 +99,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -111,6 +112,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.ByteArrayOutputStream
@@ -242,7 +244,9 @@ class Tr(
     val tapToType: String,
     val ready: String,
     val openingSearch: String,
-    val close: String
+    val close: String,
+    val liveTv: String,
+    val chCount: (Int) -> String
 )
 
 val TR = mapOf(
@@ -319,7 +323,12 @@ val TR = mapOf(
         tapToType = "Tapni sem za tipkanje",
         ready = "Pripravljeno, tipkaj",
         openingSearch = "Odpiram iskanje na TV…",
-        close = "Zapri"
+        close = "Zapri",
+        liveTv = "TV v živo",
+        chCount = { n ->
+            val m = n % 100
+            "$n " + when (m) { 1 -> "program"; 2 -> "programa"; 3, 4 -> "programi"; else -> "programov" }
+        }
     ),
     "en" to Tr(
         setupTitle = "Connect to EON box",
@@ -394,7 +403,9 @@ val TR = mapOf(
         tapToType = "Tap here to type",
         ready = "Ready, start typing",
         openingSearch = "Opening search on TV…",
-        close = "Close"
+        close = "Close",
+        liveTv = "Live TV",
+        chCount = { n -> if (n == 1) "1 channel" else "$n channels" }
     ),
     "sr" to Tr(
         setupTitle = "Povezivanje sa EON boksom",
@@ -469,7 +480,9 @@ val TR = mapOf(
         tapToType = "Dodirni ovde za kucanje",
         ready = "Spremno, kucaj",
         openingSearch = "Otvaram pretragu na TV-u…",
-        close = "Zatvori"
+        close = "Zatvori",
+        liveTv = "TV uživo",
+        chCount = { n -> "$n kanala" }
     )
 )
 
@@ -1248,6 +1261,20 @@ class AppState(private val ctx: Context) {
         press(7 + n)
     }
 
+    /** Tipka TV v živo: Domov, desno, dol, OK (odpre zadnji gledani program). */
+    fun openLiveTv() {
+        closeSearch()
+        ledTick++
+        keys.execute {
+            kbOpen = false
+            step(3, homeWait.toLong())
+            step(22, 250)
+            step(20, 250)
+            step(23)
+            kbOpen = false
+        }
+    }
+
     /** Tap na program v bobnu: vtipka številko in potrdi z OK. */
     fun pickChannel(c: Int) {
         saveChannel(c)
@@ -1881,8 +1908,11 @@ fun RoundKey(
     onDown: () -> Unit,
     onUp: () -> Unit = {},
     brush: Brush = KeyBrush,
+    width: Dp = diameter,
     content: @Composable BoxScope.() -> Unit
 ) {
+    // pri široki tipki manjši nagib, da ne zgleda pretirano
+    val tilt = 16f * (diameter / width).coerceIn(0.2f, 1f)
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val rx = remember { Animatable(0f) }
@@ -1894,7 +1924,7 @@ fun RoundKey(
 
     Box(
         Modifier
-            .size(diameter)
+            .size(width, diameter)
             .graphicsLayer {
                 rotationX = rx.value
                 rotationY = ry.value
@@ -1914,8 +1944,8 @@ fun RoundKey(
                     val ny = ((o.y - hh) / hh).coerceIn(-1f, 1f)
                     Haptics.tick(view)
                     down()
-                    scope.launch { rx.animateTo(-ny * 16f, tween(70)) }
-                    scope.launch { ry.animateTo(nx * 16f, tween(70)) }
+                    scope.launch { rx.animateTo(-ny * tilt, tween(70)) }
+                    scope.launch { ry.animateTo(nx * tilt, tween(70)) }
                     scope.launch { sc.animateTo(0.94f, tween(70)) }
                     scope.launch { glow.snapTo(1f) }
                     tryAwaitRelease()
@@ -1929,6 +1959,24 @@ fun RoundKey(
         contentAlignment = Alignment.Center,
         content = content
     )
+}
+
+/** Simbol za televizor: zaslon z nogico. */
+@Composable
+fun TvIcon(size: Dp, color: Color = GlowColor) {
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val sw = w * 0.09f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(w * 0.08f, h * 0.14f),
+            size = Size(w * 0.84f, h * 0.58f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.1f),
+            style = Stroke(width = sw)
+        )
+        drawLine(color, Offset(w * 0.34f, h * 0.88f), Offset(w * 0.66f, h * 0.88f), sw, StrokeCap.Round)
+    }
 }
 
 /** Simbol za vklop: krog z odprtino zgoraj in navpično črto. */
@@ -2345,10 +2393,18 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
         }
     }
     val glowText = TextStyle(shadow = Shadow(GlowColor.copy(alpha = 0.9f), Offset.Zero, 14f))
+    // kje je prvi program (za tipko TV, ki stoji nad njim)
+    val firstY by remember {
+        derivedStateOf {
+            val info = state.layoutInfo
+            info.visibleItemsInfo.firstOrNull { it.index == 0 }?.let { it.offset - info.viewportStartOffset }
+        }
+    }
 
     Box(
         modifier
             .height(rowH * 7)
+            .clipToBounds()
             // zgoraj in spodaj programi postopno izginejo v ozadje daljinca
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
@@ -2425,6 +2481,31 @@ fun ChannelDrum(s: AppState, k: Float, modifier: Modifier) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+            }
+        }
+        // nad prvim programom: tipka TV v živo in število programov (ob vrtenju zdrsne gor v temo)
+        firstY?.let { y ->
+            BoxWithConstraints(
+                Modifier
+                    .fillMaxWidth()
+                    .height(rowH * 3)
+                    .offset { IntOffset(0, y - (rowH * 3).roundToPx()) }
+            ) {
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    RoundKey(rowH * 1.85f, onDown = { s.openLiveTv() }, width = maxWidth - 8.dp) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TvIcon(18.dp * k)
+                            Spacer(Modifier.width(8.dp))
+                            Text(t.liveTv, fontSize = (14 * k).sp, fontWeight = FontWeight.Medium, color = TextColor)
+                        }
+                    }
+                    Spacer(Modifier.height(3.dp))
+                    Text(t.chCount(list.size), fontSize = (10 * k).sp, color = DimColor)
                 }
             }
         }
