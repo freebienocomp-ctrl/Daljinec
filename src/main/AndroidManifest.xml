@@ -10,6 +10,7 @@
         android:name=".CrashApp"
         android:allowBackup="false"
         android:label="Daljinec"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".CrashActivity"
