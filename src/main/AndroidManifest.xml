@@ -9,7 +9,7 @@
     <application
         android:name=".CrashApp"
         android:allowBackup="false"
-        android:label="Daljinec"
+        android:label="Pocket Remote"
         android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
