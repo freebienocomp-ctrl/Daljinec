@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setupTitle">"Povezivanje sa EON boksom"</string>
+    <string name="setupInfo">"Telefon i boks moraju biti na istoj Wi-Fi mreži, a boks mora biti uključen."</string>
+    <string name="searching">"Tražim boksove u mreži…"</string>
+    <string name="notListed">"Boksa nema na listi?"</string>
+    <string name="enterManually">"Unesi IP ručno"</string>
+    <string name="ipLabel">"IP adresa boksa"</string>
+    <string name="pair">"Upari"</string>
+    <string name="back">"Nazad"</string>
+    <string name="connecting">"Povezivanje…"</string>
+    <string name="enterCode">"Unesi kod koji je prikazan na TV-u."</string>
+    <string name="error">"Greška"</string>
+    <string name="noConnection">"Nema veze"</string>
+    <string name="connLost">"Veza je prekinuta"</string>
+    <string name="pairRejected">"Boks je odbio uparivanje"</string>
+    <string name="codeFormat">"Kod ima 6 znakova (0-9, A-F)"</string>
+    <string name="wrongCode">"Pogrešan kod"</string>
+    <string name="kbTitle">"Jezik tastature za pretragu"</string>
+    <string name="kbExplain">"Jezik u aplikaciji i jezik tastature u pretrazi na boksu moraju da se poklapaju, inače se unose pogrešna slova. Podešava se samo jednom."</string>
+    <string name="step1">"1. U aplikaciji"</string>
+    <string name="step2">"2. Na boksu"</string>
+    <string name="step2Text">"Dodirni dugme ispod. Na TV-u se otvara lista jezika. Tasterima ▲ ▼ izaberi %1$s i potvrdi sa OK."</string>
+    <string name="openLang">"Otvori izbor jezika na TV-u"</string>
+    <string name="notConnected">"Boks nije povezan"</string>
+    <string name="done">"Gotovo"</string>
+    <string name="up">"Gore"</string>
+    <string name="down">"Dole"</string>
+    <string name="left">"Levo"</string>
+    <string name="right">"Desno"</string>
+    <string name="settings">"Podešavanja"</string>
+    <string name="chTitle">"Lista kanala"</string>
+    <string name="syncNever">"Lista kanala još nije preuzeta."</string>
+    <string name="syncLast">"Poslednja sinhronizacija: %1$s · %2$d pozicija"</string>
+    <string name="syncRunning">"Preuzimam listu kanala…"</string>
+    <string name="syncFailed">"Poslednji pokušaj nije uspeo, koristim prethodnu listu."</string>
+    <string name="syncNow">"Ažuriraj sada"</string>
+    <string name="cancel">"Otkaži"</string>
+    <string name="showList">"Prikaži preuzetu listu"</string>
+    <string name="drumEmpty">"Lista kanala se preuzima…"</string>
+    <string name="drumHint">"Kanal · dodirni za promenu"</string>
+    <string name="stepLabel">"Pauza između koraka pri pretrazi (ms)"</string>
+    <string name="stepHint">"Manji broj = brže kucanje (5–1000). Ako slova nedostaju, povećaj ga."</string>
+    <string name="homeLabel">"Čekanje posle Početne (ms)"</string>
+    <string name="homeHint">"Koliko aplikacija čeka posle Početne pre nego što pošalje ◀ (50–5000). Ako se pretraga ne otvori, povećaj ga."</string>
+    <string name="screenLabel">"Čekanje na otvaranje pretrage (ms)"</string>
+    <string name="screenHint">"Koliko aplikacija čeka posle ◀ da EON otvori pretragu (100–5000). Ako se prvo slovo ne unese, povećaj ga."</string>
+    <string name="kbMustMatch">"Mora da se poklapa sa jezikom tastature u pretrazi na boksu."</string>
+    <string name="kbSetOnBox">"Podesi jezik i na boksu"</string>
+    <string name="appLang">"Jezik aplikacije"</string>
+    <string name="auto">"Automatski"</string>
+    <string name="vibrate">"Vibracija pri pritisku"</string>
+    <string name="save">"Sačuvaj"</string>
+    <string name="home">"Početna"</string>
+    <string name="search">"Traži"</string>
+    <string name="volume">"Jačina"</string>
+    <string name="channel">"Kanal"</string>
+    <string name="notPaired">"Boks nije uparen  ·  Poveži"</string>
+    <string name="connectedTo">"Povezano  ·  %1$s"</string>
+    <string name="pickBox">"Izaberi boks"</string>
+    <string name="addBox">"Dodaj boks"</string>
+    <string name="rename">"Preimenuj"</string>
+    <string name="remove">"Ukloni"</string>
+    <string name="boxName">"Ime boksa"</string>
+    <string name="boxDefault">"Boks %1$d"</string>
+    <string name="startLabel">"Pri pokretanju aplikacije"</string>
+    <string name="startAsk">"Pitaj za boks"</string>
+    <string name="startLast">"Poslednji korišćen"</string>
+    <string name="repairThis">"Ponovo upari ovaj boks"</string>
+    <string name="searchHint">"Traži na TV-u"</string>
+    <string name="tapToType">"Dodirni ovde za kucanje"</string>
+    <string name="ready">"Spremno, kucaj"</string>
+    <string name="openingSearch">"Otvaram pretragu na TV-u…"</string>
+    <string name="close">"Zatvori"</string>
+    <string name="liveTv">"TV uživo"</string>
+    <string name="connectingTo">"Povezujem se sa %1$s…"</string>
+    <string name="notReady">"Još nije povezano"</string>
+    <string name="unreachable">"Boks nije dostupan  ·  pokušavam ponovo"</string>
+    <string name="tipTitle">"Savet"</string>
+    <string name="tipNever">"Ne prikazuj više"</string>
+    <string name="tipsSetting">"Prikazuj savete"</string>
+    <string name="lastErr">"Poslednja greška veze"</string>
+    <string name="needRepairMsg">"Boks ne prepoznaje telefon  ·  dodirni za ponovno uparivanje"</string>
+    <string name="advanced">"Napredna podešavanja"</string>
+    <string name="welcomeTitle">"Dobro došli"</string>
+    <string name="tagline">"džepni daljinski za tvoj EON boks"</string>
+    <string name="welcomeText">"Upravljaj EON boksom preko telefona. Prvo izaberi jezik."</string>
+    <string name="phoneLang">"Jezik telefona"</string>
+    <string name="next">"Dalje"</string>
+    <string name="providerTitle">"Tvoj provajder"</string>
+    <string name="providerText">"Kod operatera Telemach Slovenija daljinski prikazuje naprednu funkciju liste kanala za brže prebacivanje."</string>
+    <string name="provTelemach">"Telemach Slovenija"</string>
+    <string name="provTelemachSub">"Lista kanala i bubanj"</string>
+    <string name="provOther">"Drugo"</string>
+    <string name="provOtherSub">"Tasteri TV uživo i Videoklub"</string>
+    <string name="start">"Počni"</string>
+    <string name="onlyTelemach">"(samo za Telemach Slovenija)"</string>
+    <string name="vod">"Videoklub"</string>
+    <string name="searchOnTv">"Pretraga na TV-u"</string>
+    <string name="boxesSec">"Boksovi"</string>
+    <string-array name="tips">
+        <item>"Za pauzu i nastavak reprodukcije dodirni OK dva puta."</item>
+        <item>"Dodirni ime boksa na vrhu za prelazak između boksova."</item>
+        <item>"Zavrti listu kanala i dodirni kanal za trenutnu promenu."</item>
+        <item>"Ako pretraga ne radi kako treba, sačekaj nekoliko sekundi pre unosa."</item>
+        <item>"Jezik tastature u aplikaciji mora da se poklapa sa jezikom pretrage na boksu."</item>
+        <item>"Boks možeš da preimenuješ preko ⋮ u listi boksova."</item>
+        <item>"U Podešavanjima biraš da li da pitam za boks pri pokretanju."</item>
+    </string-array>
+</resources>

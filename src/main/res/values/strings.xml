@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setupTitle">"Connect to EON box"</string>
+    <string name="setupInfo">"The phone and the box must be on the same Wi-Fi network, and the box must be on."</string>
+    <string name="searching">"Searching for boxes on the network…"</string>
+    <string name="notListed">"Box not on the list?"</string>
+    <string name="enterManually">"Enter IP manually"</string>
+    <string name="ipLabel">"Box IP address"</string>
+    <string name="pair">"Pair"</string>
+    <string name="back">"Back"</string>
+    <string name="connecting">"Connecting…"</string>
+    <string name="enterCode">"Enter the code shown on the TV."</string>
+    <string name="error">"Error"</string>
+    <string name="noConnection">"No connection"</string>
+    <string name="connLost">"Connection lost"</string>
+    <string name="pairRejected">"The box rejected pairing"</string>
+    <string name="codeFormat">"The code has 6 characters (0-9, A-F)"</string>
+    <string name="wrongCode">"Wrong code"</string>
+    <string name="kbTitle">"Search keyboard language"</string>
+    <string name="kbExplain">"The language in the app and the keyboard language in the box search must match, otherwise wrong letters are typed. You only set this once."</string>
+    <string name="step1">"1. In the app"</string>
+    <string name="step2">"2. On the box"</string>
+    <string name="step2Text">"Tap the button below. A list of languages opens on the TV. Use ▲ ▼ to select %1$s and confirm with OK."</string>
+    <string name="openLang">"Open language list on TV"</string>
+    <string name="notConnected">"Box not connected"</string>
+    <string name="done">"Done"</string>
+    <string name="up">"Up"</string>
+    <string name="down">"Down"</string>
+    <string name="left">"Left"</string>
+    <string name="right">"Right"</string>
+    <string name="settings">"Settings"</string>
+    <string name="chTitle">"Channel list"</string>
+    <string name="syncNever">"The channel list hasn\'t been downloaded yet."</string>
+    <string name="syncLast">"Last sync: %1$s · %2$d positions"</string>
+    <string name="syncRunning">"Downloading channel list…"</string>
+    <string name="syncFailed">"Last attempt failed, using the previous list."</string>
+    <string name="syncNow">"Update now"</string>
+    <string name="cancel">"Cancel"</string>
+    <string name="showList">"Show downloaded list"</string>
+    <string name="drumEmpty">"Downloading channel list…"</string>
+    <string name="drumHint">"Channel · tap to switch"</string>
+    <string name="stepLabel">"Delay between search steps (ms)"</string>
+    <string name="stepHint">"Lower = faster typing (5–1000). If letters are missing, increase it."</string>
+    <string name="homeLabel">"Wait after Home (ms)"</string>
+    <string name="homeHint">"How long the app waits after Home before sending ◀ (50–5000). If search doesn\'t open, increase it."</string>
+    <string name="screenLabel">"Wait for search to open (ms)"</string>
+    <string name="screenHint">"How long the app waits after ◀ for EON to open search (100–5000). If the first letter is missing, increase it."</string>
+    <string name="kbMustMatch">"Must match the keyboard language in the box search."</string>
+    <string name="kbSetOnBox">"Set the language on the box too"</string>
+    <string name="appLang">"App language"</string>
+    <string name="auto">"Automatic"</string>
+    <string name="vibrate">"Vibrate on press"</string>
+    <string name="save">"Save"</string>
+    <string name="home">"Home"</string>
+    <string name="search">"Search"</string>
+    <string name="volume">"Volume"</string>
+    <string name="channel">"Channel"</string>
+    <string name="notPaired">"Box not paired  ·  Connect"</string>
+    <string name="connectedTo">"Connected  ·  %1$s"</string>
+    <string name="pickBox">"Choose box"</string>
+    <string name="addBox">"Add box"</string>
+    <string name="rename">"Rename"</string>
+    <string name="remove">"Remove"</string>
+    <string name="boxName">"Box name"</string>
+    <string name="boxDefault">"Box %1$d"</string>
+    <string name="startLabel">"When the app starts"</string>
+    <string name="startAsk">"Ask for box"</string>
+    <string name="startLast">"Last used"</string>
+    <string name="repairThis">"Pair this box again"</string>
+    <string name="searchHint">"Search on TV"</string>
+    <string name="tapToType">"Tap here to type"</string>
+    <string name="ready">"Ready, start typing"</string>
+    <string name="openingSearch">"Opening search on TV…"</string>
+    <string name="close">"Close"</string>
+    <string name="liveTv">"Live TV"</string>
+    <string name="connectingTo">"Connecting to %1$s…"</string>
+    <string name="notReady">"Not connected yet"</string>
+    <string name="unreachable">"Box not reachable  ·  retrying"</string>
+    <string name="tipTitle">"Tip"</string>
+    <string name="tipNever">"Don\'t show again"</string>
+    <string name="tipsSetting">"Show tips"</string>
+    <string name="lastErr">"Last connection error"</string>
+    <string name="needRepairMsg">"Box doesn\'t recognize this phone  ·  tap to pair again"</string>
+    <string name="advanced">"Advanced settings"</string>
+    <string name="welcomeTitle">"Welcome"</string>
+    <string name="tagline">"pocket remote for your EON box"</string>
+    <string name="welcomeText">"Control your EON box with your phone. First, choose a language."</string>
+    <string name="phoneLang">"Phone language"</string>
+    <string name="next">"Next"</string>
+    <string name="providerTitle">"Your provider"</string>
+    <string name="providerText">"With the Telemach Slovenia operator, the remote shows an advanced channel list feature for faster switching."</string>
+    <string name="provTelemach">"Telemach Slovenia"</string>
+    <string name="provTelemachSub">"Channel list and drum"</string>
+    <string name="provOther">"Other"</string>
+    <string name="provOtherSub">"Live TV and VOD keys"</string>
+    <string name="start">"Start"</string>
+    <string name="onlyTelemach">"(Telemach Slovenia only)"</string>
+    <string name="vod">"VOD"</string>
+    <string name="searchOnTv">"Search on TV"</string>
+    <string name="boxesSec">"Boxes"</string>
+    <string-array name="tips">
+        <item>"To pause and resume playback, tap OK twice."</item>
+        <item>"Tap the box name at the top to switch between boxes."</item>
+        <item>"Spin the channel list and tap a channel to switch instantly."</item>
+        <item>"If search doesn\'t work properly, wait a few seconds before typing."</item>
+        <item>"The keyboard language in the app must match the search language on the box."</item>
+        <item>"You can rename a box with ⋮ in the box list."</item>
+        <item>"In Settings you can choose whether to ask for a box at startup."</item>
+    </string-array>
+</resources>

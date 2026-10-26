@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setupTitle">"Povezava z EON boxom"</string>
+    <string name="setupInfo">"Telefon in box morata biti v istem Wi-Fi omrežju, box pa vklopljen."</string>
+    <string name="searching">"Iščem boxe v omrežju…"</string>
+    <string name="notListed">"Boxa ni na seznamu?"</string>
+    <string name="enterManually">"Vpiši IP ročno"</string>
+    <string name="ipLabel">"IP naslov boxa"</string>
+    <string name="pair">"Upari"</string>
+    <string name="back">"Nazaj"</string>
+    <string name="connecting">"Povezujem…"</string>
+    <string name="enterCode">"Vpiši kodo, ki je prikazana na TV-ju."</string>
+    <string name="error">"Napaka"</string>
+    <string name="noConnection">"Ni povezave"</string>
+    <string name="connLost">"Povezava prekinjena"</string>
+    <string name="pairRejected">"Box je zavrnil uparjanje"</string>
+    <string name="codeFormat">"Koda ima 6 znakov (0-9, A-F)"</string>
+    <string name="wrongCode">"Napačna koda"</string>
+    <string name="kbTitle">"Jezik tipkovnice za iskanje"</string>
+    <string name="kbExplain">"Jezik v aplikaciji in jezik tipkovnice v iskanju na boxu se morata ujemati, sicer se vpisujejo napačne črke. Nastaviš samo enkrat."</string>
+    <string name="step1">"1. V aplikaciji"</string>
+    <string name="step2">"2. Na boxu"</string>
+    <string name="step2Text">"Tapni gumb spodaj. Na TV-ju se odpre seznam jezikov. S tipkami ▲ ▼ izberi %1$s in potrdi z OK."</string>
+    <string name="openLang">"Odpri izbiro jezika na TV"</string>
+    <string name="notConnected">"Box ni povezan"</string>
+    <string name="done">"Končano"</string>
+    <string name="up">"Gor"</string>
+    <string name="down">"Dol"</string>
+    <string name="left">"Levo"</string>
+    <string name="right">"Desno"</string>
+    <string name="settings">"Nastavitve"</string>
+    <string name="chTitle">"Seznam programov"</string>
+    <string name="syncNever">"Seznam programov še ni bil prenesen."</string>
+    <string name="syncLast">"Zadnja sinhronizacija: %1$s · %2$d pozicij"</string>
+    <string name="syncRunning">"Prenašam seznam programov…"</string>
+    <string name="syncFailed">"Zadnji poskus ni uspel, uporabljam prejšnji seznam."</string>
+    <string name="syncNow">"Posodobi zdaj"</string>
+    <string name="cancel">"Prekliči"</string>
+    <string name="showList">"Pokaži prebrani seznam"</string>
+    <string name="drumEmpty">"Seznam programov se prenaša…"</string>
+    <string name="drumHint">"Program · tapni za preklop"</string>
+    <string name="stepLabel">"Premor med koraki pri iskanju (ms)"</string>
+    <string name="stepHint">"Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj."</string>
+    <string name="homeLabel">"Čakanje po Domov (ms)"</string>
+    <string name="homeHint">"Koliko časa aplikacija počaka po Domov, preden pošlje ◀ (50–5000). Če iskanje ne odpre, ga povečaj."</string>
+    <string name="screenLabel">"Čakanje na odprtje iskanja (ms)"</string>
+    <string name="screenHint">"Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj."</string>
+    <string name="kbMustMatch">"Mora se ujemati z jezikom tipkovnice v iskanju na boxu."</string>
+    <string name="kbSetOnBox">"Nastavi jezik tudi na boxu"</string>
+    <string name="appLang">"Jezik aplikacije"</string>
+    <string name="auto">"Samodejno"</string>
+    <string name="vibrate">"Vibriranje ob pritisku"</string>
+    <string name="save">"Shrani"</string>
+    <string name="home">"Domov"</string>
+    <string name="search">"Išči"</string>
+    <string name="volume">"Glasnost"</string>
+    <string name="channel">"Program"</string>
+    <string name="notPaired">"Box ni uparjen  ·  Poveži"</string>
+    <string name="connectedTo">"Povezano  ·  %1$s"</string>
+    <string name="pickBox">"Izberi box"</string>
+    <string name="addBox">"Dodaj box"</string>
+    <string name="rename">"Preimenuj"</string>
+    <string name="remove">"Odstrani"</string>
+    <string name="boxName">"Ime boxa"</string>
+    <string name="boxDefault">"Box %1$d"</string>
+    <string name="startLabel">"Ob zagonu aplikacije"</string>
+    <string name="startAsk">"Vprašaj za box"</string>
+    <string name="startLast">"Zadnji uporabljen"</string>
+    <string name="repairThis">"Ponovno upari ta box"</string>
+    <string name="searchHint">"Išči na TV"</string>
+    <string name="tapToType">"Tapni sem za tipkanje"</string>
+    <string name="ready">"Pripravljeno, tipkaj"</string>
+    <string name="openingSearch">"Odpiram iskanje na TV…"</string>
+    <string name="close">"Zapri"</string>
+    <string name="liveTv">"TV v živo"</string>
+    <string name="connectingTo">"Povezujem z %1$s…"</string>
+    <string name="notReady">"Še ni povezano"</string>
+    <string name="unreachable">"Box ni dosegljiv  ·  poskušam znova"</string>
+    <string name="tipTitle">"Nasvet"</string>
+    <string name="tipNever">"Ne prikazuj več"</string>
+    <string name="tipsSetting">"Prikazuj nasvete"</string>
+    <string name="lastErr">"Zadnja napaka povezave"</string>
+    <string name="needRepairMsg">"Box ne prepozna telefona  ·  tapni za ponovno uparjanje"</string>
+    <string name="advanced">"Napredne nastavitve"</string>
+    <string name="welcomeTitle">"Dobrodošli"</string>
+    <string name="tagline">"žepni daljinec za tvoj EON box"</string>
+    <string name="welcomeText">"Upravljaj EON box s telefonom. Najprej izberi jezik."</string>
+    <string name="phoneLang">"Jezik telefona"</string>
+    <string name="next">"Naprej"</string>
+    <string name="providerTitle">"Tvoj ponudnik"</string>
+    <string name="providerText">"Pri operaterju Telemach Slovenija daljinec prikazuje napredno funkcijo seznama programov za hitrejši preklop."</string>
+    <string name="provTelemach">"Telemach Slovenija"</string>
+    <string name="provTelemachSub">"Seznam programov in boben"</string>
+    <string name="provOther">"Drugo"</string>
+    <string name="provOtherSub">"Tipki TV v živo in Videoklub"</string>
+    <string name="start">"Začni"</string>
+    <string name="onlyTelemach">"(samo za Telemach Slovenija)"</string>
+    <string name="vod">"Videoklub"</string>
+    <string name="searchOnTv">"Iskanje na TV"</string>
+    <string name="boxesSec">"Boxi"</string>
+    <string-array name="tips">
+        <item>"Za pavzo in ponovno predvajanje vsebine 2× tapni tipko OK."</item>
+        <item>"Tapni ime boxa na vrhu za preklop med boxi."</item>
+        <item>"Zavrti seznam programov in tapni program za takojšen preklop."</item>
+        <item>"Če iskanje ne deluje pravilno, počakaj nekaj sekund pred vnosom iskalnega niza."</item>
+        <item>"Jezik tipkovnice v aplikaciji se mora ujemati z jezikom iskanja na boxu."</item>
+        <item>"Box lahko preimenuješ prek ⋮ v seznamu boxov."</item>
+        <item>"V Nastavitvah izbereš, ali ob zagonu vprašam za box."</item>
+    </string-array>
+</resources>

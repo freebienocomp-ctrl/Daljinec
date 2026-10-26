@@ -74,9 +74,4 @@ class DataTest {
         assertEquals("SLO", initials("SLO 1"))
         assertEquals("DI", initials("discovery"))
     }
-
-    @Test
-    fun vsiJezikiAplikacijeObstajajo() {
-        assertTrue(TR.keys.containsAll(listOf("sl", "en", "sr")))
-    }
 }

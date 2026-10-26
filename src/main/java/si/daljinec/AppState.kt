@@ -66,7 +66,7 @@ class AppState(private val ctx: Context) {
     var vibrate by mutableStateOf(prefs.getBoolean("vib", true))
     var kbLang by mutableStateOf(systemLang())
     var uiLangPref by mutableStateOf(prefs.getString("uilang", "auto") ?: "auto")
-    val tr: Tr get() = TR.getValue(if (uiLangPref == "auto") systemLang() else uiLangPref)
+    val tr: Tr get() = trFor(ctx, if (uiLangPref == "auto") systemLang() else uiLangPref)
     var showLangSetup by mutableStateOf(false)
     val found = mutableStateListOf<Pair<String, String>>()
 
