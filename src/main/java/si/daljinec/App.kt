@@ -29,12 +29,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -84,7 +82,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -113,14 +110,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.ImageShader
-import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -187,25 +180,7 @@ val ArrowColor = Color(0xFFC8CCD2)
 val ArrowLit = Color(0xFF93C5FD)
 val BodyBrush = Brush.verticalGradient(listOf(Color(0xFF0C0E10), Color(0xFF060708)))
 
-/** Droben zrnat vzorec za mat plastiko ohišja (narejen enkrat, ponavlja se). */
-fun grainBrush(): Brush {
-    val n = 96
-    val bmp = android.graphics.Bitmap.createBitmap(n * 2, n * 2, android.graphics.Bitmap.Config.ARGB_8888)
-    val rnd = java.util.Random(7)
-    for (y in 0 until n) for (x in 0 until n) {
-        val a = rnd.nextInt(26)
-        val v = if (rnd.nextBoolean()) 255 else 0
-        val c = android.graphics.Color.argb(a, v, v, v)
-        // vsako "zrno" je 2 x 2 pikslov, da je vidno tudi na ostrem zaslonu
-        bmp.setPixel(x * 2, y * 2, c)
-        bmp.setPixel(x * 2 + 1, y * 2, c)
-        bmp.setPixel(x * 2, y * 2 + 1, c)
-        bmp.setPixel(x * 2 + 1, y * 2 + 1, c)
-    }
-    return ShaderBrush(ImageShader(bmp.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
-}
 val KeyBrush = Brush.verticalGradient(listOf(Color(0xFF2C3138), Color(0xFF22262C)))
-val PowerBrush = Brush.verticalGradient(listOf(Color(0xFFE5484D), Color(0xFFB4232A)))
 
 // ---------- pisava ----------
 
@@ -249,14 +224,11 @@ fun systemLang(): String = when (java.util.Locale.getDefault().language) {
 class Tr(
     val setupTitle: String,
     val setupInfo: String,
-    val foundBoxes: String,
     val searching: String,
     val notListed: String,
     val enterManually: String,
     val ipLabel: String,
     val pair: String,
-    val codeLabel: String,
-    val confirmCode: String,
     val back: String,
     val connecting: String,
     val enterCode: String,
@@ -285,9 +257,6 @@ class Tr(
     val syncRunning: String,
     val syncFailed: String,
     val syncNow: String,
-    val setChTitle: String,
-    val setChLabel: String,
-    val ok: String,
     val cancel: String,
     val showList: String,
     val drumEmpty: String,
@@ -304,20 +273,11 @@ class Tr(
     val auto: String,
     val vibrate: String,
     val save: String,
-    val testTitle: String,
-    val testCode: String,
-    val send: String,
-    val sendHold: String,
-    val repair: String,
-    val pairBox: String,
     val home: String,
     val search: String,
     val volume: String,
     val channel: String,
-    val nextCh: String,
-    val prevCh: String,
     val notPaired: String,
-    val connectedCh: (Int) -> String,
     val connectedTo: (String) -> String,
     val pickBox: String,
     val addBox: String,
@@ -360,30 +320,18 @@ class Tr(
     val vod: String,
     val searchOnTv: String,
     val boxesSec: String,
-    val testsSec: String,
     val tips: List<String>,
-    val ctTitle: String,
-    val ctHint: String,
-    val ctNext: String,
-    val ctPrev: String,
-    val ctAgain: String,
-    val ctWorks: String,
-    val ctFound: String,
-    val chCount: (Int) -> String
 )
 
 val TR = mapOf(
     "sl" to Tr(
         setupTitle = "Povezava z EON boxom",
         setupInfo = "Telefon in box morata biti v istem Wi-Fi omrežju, box pa vklopljen.",
-        foundBoxes = "Najdeni boxi:",
         searching = "Iščem boxe v omrežju…",
         notListed = "Boxa ni na seznamu?",
         enterManually = "Vpiši IP ročno",
         ipLabel = "IP naslov boxa",
         pair = "Upari",
-        codeLabel = "Koda s TV-ja (6 znakov)",
-        confirmCode = "Potrdi kodo",
         back = "Nazaj",
         connecting = "Povezujem…",
         enterCode = "Vpiši kodo, ki je prikazana na TV-ju.",
@@ -412,9 +360,6 @@ val TR = mapOf(
         syncRunning = "Prenašam seznam programov…",
         syncFailed = "Zadnji poskus ni uspel, uporabljam prejšnji seznam.",
         syncNow = "Posodobi zdaj",
-        setChTitle = "Na katerem programu si?",
-        setChLabel = "Številka programa",
-        ok = "V redu",
         cancel = "Prekliči",
         showList = "Pokaži prebrani seznam",
         drumEmpty = "Seznam programov se prenaša…",
@@ -431,20 +376,11 @@ val TR = mapOf(
         auto = "Samodejno",
         vibrate = "Vibriranje ob pritisku",
         save = "Shrani",
-        testTitle = "Preizkus kode tipke",
-        testCode = "Test koda",
-        send = "Pošlji",
-        sendHold = "Pošlji (drži)",
-        repair = "Ponovno upari box",
-        pairBox = "Upari box",
         home = "Domov",
         search = "Išči",
         volume = "Glasnost",
         channel = "Program",
-        nextCh = "Naslednji program",
-        prevCh = "Prejšnji program",
         notPaired = "Box ni uparjen  ·  Poveži",
-        connectedCh = { n -> "Povezano  ·  Program $n" },
         connectedTo = { n -> "Povezano  ·  $n" },
         pickBox = "Izberi box",
         addBox = "Dodaj box",
@@ -487,7 +423,6 @@ val TR = mapOf(
         vod = "Videoklub",
         searchOnTv = "Iskanje na TV",
         boxesSec = "Boxi",
-        testsSec = "Preizkusi",
         tips = listOf(
             "Za pavzo in ponovno predvajanje vsebine 2× tapni tipko OK.",
             "Tapni ime boxa na vrhu za preklop med boxi.",
@@ -497,29 +432,15 @@ val TR = mapOf(
             "Box lahko preimenuješ prek ⋮ v seznamu boxov.",
             "V Nastavitvah izbereš, ali ob zagonu vprašam za box."
         ),
-        ctTitle = "Iskanje kode za program gor/dol",
-        ctHint = "Na TV-ju odpri TV v živo. Tapaj Naslednja in opazuj TV. Ko se program premakne, tapni Ta deluje!",
-        ctNext = "Naslednja ▶",
-        ctPrev = "◀ Prejšnja",
-        ctAgain = "Pošlji znova",
-        ctWorks = "Ta deluje!",
-        ctFound = "Delujoče kode:",
-        chCount = { n ->
-            val m = n % 100
-            "$n " + when (m) { 1 -> "program"; 2 -> "programa"; 3, 4 -> "programi"; else -> "programov" }
-        }
     ),
     "en" to Tr(
         setupTitle = "Connect to EON box",
         setupInfo = "The phone and the box must be on the same Wi-Fi network, and the box must be on.",
-        foundBoxes = "Boxes found:",
         searching = "Searching for boxes on the network…",
         notListed = "Box not on the list?",
         enterManually = "Enter IP manually",
         ipLabel = "Box IP address",
         pair = "Pair",
-        codeLabel = "Code from TV (6 characters)",
-        confirmCode = "Confirm code",
         back = "Back",
         connecting = "Connecting…",
         enterCode = "Enter the code shown on the TV.",
@@ -548,9 +469,6 @@ val TR = mapOf(
         syncRunning = "Downloading channel list…",
         syncFailed = "Last attempt failed, using the previous list.",
         syncNow = "Update now",
-        setChTitle = "Which channel are you on?",
-        setChLabel = "Channel number",
-        ok = "OK",
         cancel = "Cancel",
         showList = "Show downloaded list",
         drumEmpty = "Downloading channel list…",
@@ -567,20 +485,11 @@ val TR = mapOf(
         auto = "Automatic",
         vibrate = "Vibrate on press",
         save = "Save",
-        testTitle = "Key code test",
-        testCode = "Test code",
-        send = "Send",
-        sendHold = "Send (hold)",
-        repair = "Pair box again",
-        pairBox = "Pair box",
         home = "Home",
         search = "Search",
         volume = "Volume",
         channel = "Channel",
-        nextCh = "Next channel",
-        prevCh = "Previous channel",
         notPaired = "Box not paired  ·  Connect",
-        connectedCh = { n -> "Connected  ·  Channel $n" },
         connectedTo = { n -> "Connected  ·  $n" },
         pickBox = "Choose box",
         addBox = "Add box",
@@ -623,7 +532,6 @@ val TR = mapOf(
         vod = "VOD",
         searchOnTv = "Search on TV",
         boxesSec = "Boxes",
-        testsSec = "Tests",
         tips = listOf(
             "To pause and resume playback, tap OK twice.",
             "Tap the box name at the top to switch between boxes.",
@@ -633,26 +541,15 @@ val TR = mapOf(
             "You can rename a box with ⋮ in the box list.",
             "In Settings you can choose whether to ask for a box at startup."
         ),
-        ctTitle = "Find the channel up/down code",
-        ctHint = "Open live TV on the box. Tap Next and watch the TV. When the channel changes, tap This works!",
-        ctNext = "Next ▶",
-        ctPrev = "◀ Previous",
-        ctAgain = "Send again",
-        ctWorks = "This works!",
-        ctFound = "Working codes:",
-        chCount = { n -> if (n == 1) "1 channel" else "$n channels" }
     ),
     "sr" to Tr(
         setupTitle = "Povezivanje sa EON boksom",
         setupInfo = "Telefon i boks moraju biti na istoj Wi-Fi mreži, a boks mora biti uključen.",
-        foundBoxes = "Pronađeni boksovi:",
         searching = "Tražim boksove u mreži…",
         notListed = "Boksa nema na listi?",
         enterManually = "Unesi IP ručno",
         ipLabel = "IP adresa boksa",
         pair = "Upari",
-        codeLabel = "Kod sa TV-a (6 znakova)",
-        confirmCode = "Potvrdi kod",
         back = "Nazad",
         connecting = "Povezivanje…",
         enterCode = "Unesi kod koji je prikazan na TV-u.",
@@ -681,9 +578,6 @@ val TR = mapOf(
         syncRunning = "Preuzimam listu kanala…",
         syncFailed = "Poslednji pokušaj nije uspeo, koristim prethodnu listu.",
         syncNow = "Ažuriraj sada",
-        setChTitle = "Na kom si kanalu?",
-        setChLabel = "Broj kanala",
-        ok = "U redu",
         cancel = "Otkaži",
         showList = "Prikaži preuzetu listu",
         drumEmpty = "Lista kanala se preuzima…",
@@ -700,20 +594,11 @@ val TR = mapOf(
         auto = "Automatski",
         vibrate = "Vibracija pri pritisku",
         save = "Sačuvaj",
-        testTitle = "Test koda tastera",
-        testCode = "Test kod",
-        send = "Pošalji",
-        sendHold = "Pošalji (drži)",
-        repair = "Ponovo upari boks",
-        pairBox = "Upari boks",
         home = "Početna",
         search = "Traži",
         volume = "Jačina",
         channel = "Kanal",
-        nextCh = "Sledeći kanal",
-        prevCh = "Prethodni kanal",
         notPaired = "Boks nije uparen  ·  Poveži",
-        connectedCh = { n -> "Povezano  ·  Kanal $n" },
         connectedTo = { n -> "Povezano  ·  $n" },
         pickBox = "Izaberi boks",
         addBox = "Dodaj boks",
@@ -756,7 +641,6 @@ val TR = mapOf(
         vod = "Videoklub",
         searchOnTv = "Pretraga na TV-u",
         boxesSec = "Boksovi",
-        testsSec = "Testovi",
         tips = listOf(
             "Za pauzu i nastavak reprodukcije dodirni OK dva puta.",
             "Dodirni ime boksa na vrhu za prelazak između boksova.",
@@ -766,14 +650,6 @@ val TR = mapOf(
             "Boks možeš da preimenuješ preko ⋮ u listi boksova.",
             "U Podešavanjima biraš da li da pitam za boks pri pokretanju."
         ),
-        ctTitle = "Traženje koda za kanal gore/dole",
-        ctHint = "Na TV-u otvori TV uživo. Dodiruj Sledeći i gledaj TV. Kada se kanal promeni, dodirni Ovaj radi!",
-        ctNext = "Sledeći ▶",
-        ctPrev = "◀ Prethodni",
-        ctAgain = "Pošalji ponovo",
-        ctWorks = "Ovaj radi!",
-        ctFound = "Kodovi koji rade:",
-        chCount = { n -> "$n kanala" }
     )
 )
 
@@ -1257,34 +1133,6 @@ fun eonPos(ch: Char, lang: String): Pair<Int, Int>? {
 
 // ---------- programi ----------
 
-/** Kode, ki bi lahko preklopile program (koda, ime, ali se pošlje kot držanje). */
-val CH_TEST_CODES = listOf(
-    Triple(166, "CHANNEL_UP", false),
-    Triple(167, "CHANNEL_DOWN", false),
-    Triple(166, "CHANNEL_UP", true),
-    Triple(167, "CHANNEL_DOWN", true),
-    Triple(92, "PAGE_UP", false),
-    Triple(93, "PAGE_DOWN", false),
-    Triple(87, "MEDIA_NEXT", false),
-    Triple(88, "MEDIA_PREVIOUS", false),
-    Triple(272, "MEDIA_SKIP_FORWARD", false),
-    Triple(273, "MEDIA_SKIP_BACKWARD", false),
-    Triple(90, "MEDIA_FAST_FORWARD", false),
-    Triple(89, "MEDIA_REWIND", false),
-    Triple(261, "NAVIGATE_NEXT", false),
-    Triple(260, "NAVIGATE_PREVIOUS", false),
-    Triple(229, "LAST_CHANNEL", false),
-    Triple(172, "GUIDE", false),
-    Triple(165, "INFO", false),
-    Triple(170, "TV", false),
-    Triple(183, "PROG_RED", false),
-    Triple(184, "PROG_GREEN", false),
-    Triple(185, "PROG_YELLOW", false),
-    Triple(186, "PROG_BLUE", false),
-    Triple(19, "DPAD_UP (hold)", true),
-    Triple(20, "DPAD_DOWN (hold)", true)
-)
-
 /** Od te pozicije naprej so radijski programi, teh ne beremo. */
 const val RADIO_FROM = 850
 
@@ -1377,8 +1225,6 @@ class AppState(private val ctx: Context) {
     var channels by mutableStateOf(channelsFromJson(prefs.getString("chlist2", "[]") ?: "[]").filter { it.pos < RADIO_FROM })
     var logoTick by mutableStateOf(0)
     var showListDialog by mutableStateOf(false)
-    var ctIndex by mutableStateOf(-1)
-    var ctFound by mutableStateOf(prefs.getString("chcodes", "") ?: "")
     private val logoCache = HashMap<String, ImageBitmap>()
     var lastSync by mutableStateOf(prefs.getLong("chsync", 0L))
     var syncRunning by mutableStateOf(false)
@@ -1794,16 +1640,6 @@ class AppState(private val ctx: Context) {
         keys.execute { remote?.key(code, 2) }
     }
 
-    /** Preizkus: pošlje "pritisnjeno", počaka 150 ms in pošlje "spuščeno" (kot fizični daljinec). */
-    fun holdPress(code: Int) {
-        ledTick++
-        keys.execute {
-            remote?.key(code, 1)
-            Thread.sleep(150)
-            remote?.key(code, 2)
-        }
-    }
-
     fun saveTimings(step: Int, home: Int, screen: Int) {
         stepDelay = step
         homeWait = home
@@ -1881,7 +1717,6 @@ class AppState(private val ctx: Context) {
         return b
     }
 
-    fun channelName(pos: Int): String? = channels.firstOrNull { it.pos == pos }?.name?.takeIf { it.isNotBlank() }
 
     // glasnost −: kratek pritisk zniža, dolg pritisk (0,6 s) utiša
     private var minusMuted = false
@@ -1916,24 +1751,6 @@ class AppState(private val ctx: Context) {
         lastDigit = now
         entry.toIntOrNull()?.let { if (it > 0) saveChannel(it) }
         press(7 + n)
-    }
-
-    /** Test kod: pošlje kodo na mestu i (kratek pritisk ali držanje). */
-    fun ctSend(i: Int) {
-        ctIndex = i
-        val (code, _, hold) = CH_TEST_CODES[i]
-        if (hold) holdPress(code) else press(code)
-    }
-
-    /** Test kod: zapomni si trenutno kodo kot delujočo. */
-    fun ctMarkWorks() {
-        if (ctIndex < 0) return
-        val (code, name, hold) = CH_TEST_CODES[ctIndex]
-        val item = "$code $name" + if (hold) " ⏷" else ""
-        val list = ctFound.split(", ").filter { it.isNotBlank() }
-        if (item in list) return
-        ctFound = (list + item).joinToString(", ")
-        prefs.edit().putString("chcodes", ctFound).apply()
     }
 
     /** Tipka Videoklub: Domov, desno, desno, OK. */
@@ -2744,7 +2561,6 @@ fun SettingsScreen(s: AppState) {
     var stepText by remember { mutableStateOf(s.stepDelay.toString()) }
     var homeText by remember { mutableStateOf(s.homeWait.toString()) }
     var screenText by remember { mutableStateOf(s.screenWait.toString()) }
-    var testCode by remember { mutableStateOf("") }
     val t = s.tr
 
     fun saveTimes() {
@@ -3112,28 +2928,6 @@ fun PowerIcon(size: Dp, color: Color = Color(0xFFEF4444)) {
     }
 }
 
-/** Simbol za utišanje: zvočnik in prečrtan X. */
-@Composable
-fun MuteIcon(size: Dp, color: Color = TextColor) {
-    Canvas(Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val speaker = androidx.compose.ui.graphics.Path().apply {
-            moveTo(w * 0.10f, h * 0.36f)
-            lineTo(w * 0.28f, h * 0.36f)
-            lineTo(w * 0.52f, h * 0.16f)
-            lineTo(w * 0.52f, h * 0.84f)
-            lineTo(w * 0.28f, h * 0.64f)
-            lineTo(w * 0.10f, h * 0.64f)
-            close()
-        }
-        drawPath(speaker, color)
-        val sw = w * 0.09f
-        drawLine(color, Offset(w * 0.66f, h * 0.36f), Offset(w * 0.90f, h * 0.64f), sw, StrokeCap.Round)
-        drawLine(color, Offset(w * 0.90f, h * 0.36f), Offset(w * 0.66f, h * 0.64f), sw, StrokeCap.Round)
-    }
-}
-
 @Composable
 fun IconLabel(icon: ImageVector, label: String, k: Float, tint: Color = TextColor) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -3163,7 +2957,6 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
     val dsc = remember { Animatable(1f) }
     val okScale = remember { Animatable(1f) }
     val okFace = remember { Animatable(1f) }
-    val blink = remember { Animatable(0f) }
     val bounds = remember { arrayOf(Rect.Zero) }
     var lit by remember { mutableStateOf(-1) } // 0 gor, 1 desno, 2 dol, 3 levo
     val t = s.tr
@@ -3280,7 +3073,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
         Arrow(Icons.Filled.KeyboardArrowDown, t.down, lit == 2, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp * k), k)
         Arrow(Icons.Filled.KeyboardArrowLeft, t.left, lit == 3, Modifier.align(Alignment.CenterStart).padding(start = 10.dp * k), k)
         Arrow(Icons.Filled.KeyboardArrowRight, t.right, lit == 1, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp * k), k)
-        // dihajoč sij okoli OK (samo ko je box povezan) in vrteč se krog med povezovanjem
+        // vrteč se krog okoli OK med povezovanjem
         Box(
             Modifier
                 .align(Alignment.Center)
@@ -3306,15 +3099,6 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                                 style = Stroke(width = 3.dp.toPx())
                             )
                         }
-                    }
-                    val g = 0.45f * blink.value * conn
-                    if (g > 0f) {
-                        drawCircle(
-                            Brush.radialGradient(
-                                0.55f to AccentColor.copy(alpha = 0.55f * g),
-                                1f to Color.Transparent
-                            )
-                        )
                     }
                 }
         )
