@@ -1,0 +1,610 @@
+package si.daljinec
+
+import android.content.Context
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import android.graphics.BitmapFactory
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Build
+import android.media.AudioAttributes
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.setContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.*
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.material3.Typography
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.math.BigInteger
+import java.net.Socket
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.Principal
+import java.security.PrivateKey
+import java.security.cert.X509Certificate
+import java.security.interfaces.RSAPublicKey
+import java.util.Date
+import java.util.concurrent.Executors
+import javax.net.ssl.KeyManager
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509KeyManager
+import javax.net.ssl.X509TrustManager
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.bouncycastle.asn1.x500.X500Name
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+
+// ---------- jezik aplikacije ----------
+
+/** Jezik telefona: sl, sr (tudi hr, bs, me) ali en. */
+fun systemLang(): String = when (java.util.Locale.getDefault().language) {
+    "sl" -> "sl"
+    "sr", "hr", "bs", "sh", "me", "cnr" -> "sr"
+    else -> "en"
+}
+
+class Tr(
+    val setupTitle: String,
+    val setupInfo: String,
+    val searching: String,
+    val notListed: String,
+    val enterManually: String,
+    val ipLabel: String,
+    val pair: String,
+    val back: String,
+    val connecting: String,
+    val enterCode: String,
+    val error: String,
+    val noConnection: String,
+    val connLost: String,
+    val pairRejected: String,
+    val codeFormat: String,
+    val wrongCode: String,
+    val kbTitle: String,
+    val kbExplain: String,
+    val step1: String,
+    val step2: String,
+    val step2Text: (String) -> String,
+    val openLang: String,
+    val notConnected: String,
+    val done: String,
+    val up: String,
+    val down: String,
+    val left: String,
+    val right: String,
+    val settings: String,
+    val chTitle: String,
+    val syncNever: String,
+    val syncLast: (String, Int) -> String,
+    val syncRunning: String,
+    val syncFailed: String,
+    val syncNow: String,
+    val cancel: String,
+    val showList: String,
+    val drumEmpty: String,
+    val drumHint: String,
+    val stepLabel: String,
+    val stepHint: String,
+    val homeLabel: String,
+    val homeHint: String,
+    val screenLabel: String,
+    val screenHint: String,
+    val kbMustMatch: String,
+    val kbSetOnBox: String,
+    val appLang: String,
+    val auto: String,
+    val vibrate: String,
+    val save: String,
+    val home: String,
+    val search: String,
+    val volume: String,
+    val channel: String,
+    val notPaired: String,
+    val connectedTo: (String) -> String,
+    val pickBox: String,
+    val addBox: String,
+    val rename: String,
+    val remove: String,
+    val boxName: String,
+    val boxDefault: (Int) -> String,
+    val startLabel: String,
+    val startAsk: String,
+    val startLast: String,
+    val repairThis: String,
+    val searchHint: String,
+    val tapToType: String,
+    val ready: String,
+    val openingSearch: String,
+    val close: String,
+    val liveTv: String,
+    val connectingTo: (String) -> String,
+    val notReady: String,
+    val unreachable: String,
+    val tipTitle: String,
+    val tipNever: String,
+    val tipsSetting: String,
+    val lastErr: String,
+    val needRepairMsg: String,
+    val advanced: String,
+    val welcomeTitle: String,
+    val tagline: String,
+    val welcomeText: String,
+    val phoneLang: String,
+    val next: String,
+    val providerTitle: String,
+    val providerText: String,
+    val provTelemach: String,
+    val provTelemachSub: String,
+    val provOther: String,
+    val provOtherSub: String,
+    val start: String,
+    val onlyTelemach: String,
+    val vod: String,
+    val searchOnTv: String,
+    val boxesSec: String,
+    val tips: List<String>,
+)
+
+val TR = mapOf(
+    "sl" to Tr(
+        setupTitle = "Povezava z EON boxom",
+        setupInfo = "Telefon in box morata biti v istem Wi-Fi omrežju, box pa vklopljen.",
+        searching = "Iščem boxe v omrežju…",
+        notListed = "Boxa ni na seznamu?",
+        enterManually = "Vpiši IP ročno",
+        ipLabel = "IP naslov boxa",
+        pair = "Upari",
+        back = "Nazaj",
+        connecting = "Povezujem…",
+        enterCode = "Vpiši kodo, ki je prikazana na TV-ju.",
+        error = "Napaka",
+        noConnection = "Ni povezave",
+        connLost = "Povezava prekinjena",
+        pairRejected = "Box je zavrnil uparjanje",
+        codeFormat = "Koda ima 6 znakov (0-9, A-F)",
+        wrongCode = "Napačna koda",
+        kbTitle = "Jezik tipkovnice za iskanje",
+        kbExplain = "Jezik v aplikaciji in jezik tipkovnice v iskanju na boxu se morata ujemati, sicer se vpisujejo napačne črke. Nastaviš samo enkrat.",
+        step1 = "1. V aplikaciji",
+        step2 = "2. Na boxu",
+        step2Text = { n -> "Tapni gumb spodaj. Na TV-ju se odpre seznam jezikov. S tipkami ▲ ▼ izberi $n in potrdi z OK." },
+        openLang = "Odpri izbiro jezika na TV",
+        notConnected = "Box ni povezan",
+        done = "Končano",
+        up = "Gor",
+        down = "Dol",
+        left = "Levo",
+        right = "Desno",
+        settings = "Nastavitve",
+        chTitle = "Seznam programov",
+        syncNever = "Seznam programov še ni bil prenesen.",
+        syncLast = { d, n -> "Zadnja sinhronizacija: $d · $n pozicij" },
+        syncRunning = "Prenašam seznam programov…",
+        syncFailed = "Zadnji poskus ni uspel, uporabljam prejšnji seznam.",
+        syncNow = "Posodobi zdaj",
+        cancel = "Prekliči",
+        showList = "Pokaži prebrani seznam",
+        drumEmpty = "Seznam programov se prenaša…",
+        drumHint = "Program · tapni za preklop",
+        stepLabel = "Premor med koraki pri iskanju (ms)",
+        stepHint = "Manjše število = hitrejše tipkanje (5–1000). Če črke manjkajo, ga povečaj.",
+        homeLabel = "Čakanje po Domov (ms)",
+        homeHint = "Koliko časa aplikacija počaka po Domov, preden pošlje ◀ (50–5000). Če iskanje ne odpre, ga povečaj.",
+        screenLabel = "Čakanje na odprtje iskanja (ms)",
+        screenHint = "Koliko časa aplikacija počaka po ◀, da EON odpre iskanje (100–5000). Če se prva črka ne vpiše, ga povečaj.",
+        kbMustMatch = "Mora se ujemati z jezikom tipkovnice v iskanju na boxu.",
+        kbSetOnBox = "Nastavi jezik tudi na boxu",
+        appLang = "Jezik aplikacije",
+        auto = "Samodejno",
+        vibrate = "Vibriranje ob pritisku",
+        save = "Shrani",
+        home = "Domov",
+        search = "Išči",
+        volume = "Glasnost",
+        channel = "Program",
+        notPaired = "Box ni uparjen  ·  Poveži",
+        connectedTo = { n -> "Povezano  ·  $n" },
+        pickBox = "Izberi box",
+        addBox = "Dodaj box",
+        rename = "Preimenuj",
+        remove = "Odstrani",
+        boxName = "Ime boxa",
+        boxDefault = { n -> "Box $n" },
+        startLabel = "Ob zagonu aplikacije",
+        startAsk = "Vprašaj za box",
+        startLast = "Zadnji uporabljen",
+        repairThis = "Ponovno upari ta box",
+        searchHint = "Išči na TV",
+        tapToType = "Tapni sem za tipkanje",
+        ready = "Pripravljeno, tipkaj",
+        openingSearch = "Odpiram iskanje na TV…",
+        close = "Zapri",
+        liveTv = "TV v živo",
+        connectingTo = { n -> "Povezujem z $n…" },
+        notReady = "Še ni povezano",
+        unreachable = "Box ni dosegljiv  ·  poskušam znova",
+        tipTitle = "Nasvet",
+        tipNever = "Ne prikazuj več",
+        tipsSetting = "Prikazuj nasvete",
+        lastErr = "Zadnja napaka povezave",
+        needRepairMsg = "Box ne prepozna telefona  ·  tapni za ponovno uparjanje",
+        advanced = "Napredne nastavitve",
+        welcomeTitle = "Dobrodošli",
+        tagline = "žepni daljinec za tvoj EON box",
+        welcomeText = "Upravljaj EON box s telefonom. Najprej izberi jezik.",
+        phoneLang = "Jezik telefona",
+        next = "Naprej",
+        providerTitle = "Tvoj ponudnik",
+        providerText = "Pri operaterju Telemach Slovenija daljinec prikazuje napredno funkcijo seznama programov za hitrejši preklop.",
+        provTelemach = "Telemach Slovenija",
+        provTelemachSub = "Seznam programov in boben",
+        provOther = "Drugo",
+        provOtherSub = "Tipki TV v živo in Videoklub",
+        start = "Začni",
+        onlyTelemach = "(samo za Telemach Slovenija)",
+        vod = "Videoklub",
+        searchOnTv = "Iskanje na TV",
+        boxesSec = "Boxi",
+        tips = listOf(
+            "Za pavzo in ponovno predvajanje vsebine 2× tapni tipko OK.",
+            "Tapni ime boxa na vrhu za preklop med boxi.",
+            "Zavrti seznam programov in tapni program za takojšen preklop.",
+            "Če iskanje ne deluje pravilno, počakaj nekaj sekund pred vnosom iskalnega niza.",
+            "Jezik tipkovnice v aplikaciji se mora ujemati z jezikom iskanja na boxu.",
+            "Box lahko preimenuješ prek ⋮ v seznamu boxov.",
+            "V Nastavitvah izbereš, ali ob zagonu vprašam za box."
+        ),
+    ),
+    "en" to Tr(
+        setupTitle = "Connect to EON box",
+        setupInfo = "The phone and the box must be on the same Wi-Fi network, and the box must be on.",
+        searching = "Searching for boxes on the network…",
+        notListed = "Box not on the list?",
+        enterManually = "Enter IP manually",
+        ipLabel = "Box IP address",
+        pair = "Pair",
+        back = "Back",
+        connecting = "Connecting…",
+        enterCode = "Enter the code shown on the TV.",
+        error = "Error",
+        noConnection = "No connection",
+        connLost = "Connection lost",
+        pairRejected = "The box rejected pairing",
+        codeFormat = "The code has 6 characters (0-9, A-F)",
+        wrongCode = "Wrong code",
+        kbTitle = "Search keyboard language",
+        kbExplain = "The language in the app and the keyboard language in the box search must match, otherwise wrong letters are typed. You only set this once.",
+        step1 = "1. In the app",
+        step2 = "2. On the box",
+        step2Text = { n -> "Tap the button below. A list of languages opens on the TV. Use ▲ ▼ to select $n and confirm with OK." },
+        openLang = "Open language list on TV",
+        notConnected = "Box not connected",
+        done = "Done",
+        up = "Up",
+        down = "Down",
+        left = "Left",
+        right = "Right",
+        settings = "Settings",
+        chTitle = "Channel list",
+        syncNever = "The channel list hasn't been downloaded yet.",
+        syncLast = { d, n -> "Last sync: $d · $n positions" },
+        syncRunning = "Downloading channel list…",
+        syncFailed = "Last attempt failed, using the previous list.",
+        syncNow = "Update now",
+        cancel = "Cancel",
+        showList = "Show downloaded list",
+        drumEmpty = "Downloading channel list…",
+        drumHint = "Channel · tap to switch",
+        stepLabel = "Delay between search steps (ms)",
+        stepHint = "Lower = faster typing (5–1000). If letters are missing, increase it.",
+        homeLabel = "Wait after Home (ms)",
+        homeHint = "How long the app waits after Home before sending ◀ (50–5000). If search doesn't open, increase it.",
+        screenLabel = "Wait for search to open (ms)",
+        screenHint = "How long the app waits after ◀ for EON to open search (100–5000). If the first letter is missing, increase it.",
+        kbMustMatch = "Must match the keyboard language in the box search.",
+        kbSetOnBox = "Set the language on the box too",
+        appLang = "App language",
+        auto = "Automatic",
+        vibrate = "Vibrate on press",
+        save = "Save",
+        home = "Home",
+        search = "Search",
+        volume = "Volume",
+        channel = "Channel",
+        notPaired = "Box not paired  ·  Connect",
+        connectedTo = { n -> "Connected  ·  $n" },
+        pickBox = "Choose box",
+        addBox = "Add box",
+        rename = "Rename",
+        remove = "Remove",
+        boxName = "Box name",
+        boxDefault = { n -> "Box $n" },
+        startLabel = "When the app starts",
+        startAsk = "Ask for box",
+        startLast = "Last used",
+        repairThis = "Pair this box again",
+        searchHint = "Search on TV",
+        tapToType = "Tap here to type",
+        ready = "Ready, start typing",
+        openingSearch = "Opening search on TV…",
+        close = "Close",
+        liveTv = "Live TV",
+        connectingTo = { n -> "Connecting to $n…" },
+        notReady = "Not connected yet",
+        unreachable = "Box not reachable  ·  retrying",
+        tipTitle = "Tip",
+        tipNever = "Don't show again",
+        tipsSetting = "Show tips",
+        lastErr = "Last connection error",
+        needRepairMsg = "Box doesn't recognize this phone  ·  tap to pair again",
+        advanced = "Advanced settings",
+        welcomeTitle = "Welcome",
+        tagline = "pocket remote for your EON box",
+        welcomeText = "Control your EON box with your phone. First, choose a language.",
+        phoneLang = "Phone language",
+        next = "Next",
+        providerTitle = "Your provider",
+        providerText = "With the Telemach Slovenia operator, the remote shows an advanced channel list feature for faster switching.",
+        provTelemach = "Telemach Slovenia",
+        provTelemachSub = "Channel list and drum",
+        provOther = "Other",
+        provOtherSub = "Live TV and VOD keys",
+        start = "Start",
+        onlyTelemach = "(Telemach Slovenia only)",
+        vod = "VOD",
+        searchOnTv = "Search on TV",
+        boxesSec = "Boxes",
+        tips = listOf(
+            "To pause and resume playback, tap OK twice.",
+            "Tap the box name at the top to switch between boxes.",
+            "Spin the channel list and tap a channel to switch instantly.",
+            "If search doesn't work properly, wait a few seconds before typing.",
+            "The keyboard language in the app must match the search language on the box.",
+            "You can rename a box with ⋮ in the box list.",
+            "In Settings you can choose whether to ask for a box at startup."
+        ),
+    ),
+    "sr" to Tr(
+        setupTitle = "Povezivanje sa EON boksom",
+        setupInfo = "Telefon i boks moraju biti na istoj Wi-Fi mreži, a boks mora biti uključen.",
+        searching = "Tražim boksove u mreži…",
+        notListed = "Boksa nema na listi?",
+        enterManually = "Unesi IP ručno",
+        ipLabel = "IP adresa boksa",
+        pair = "Upari",
+        back = "Nazad",
+        connecting = "Povezivanje…",
+        enterCode = "Unesi kod koji je prikazan na TV-u.",
+        error = "Greška",
+        noConnection = "Nema veze",
+        connLost = "Veza je prekinuta",
+        pairRejected = "Boks je odbio uparivanje",
+        codeFormat = "Kod ima 6 znakova (0-9, A-F)",
+        wrongCode = "Pogrešan kod",
+        kbTitle = "Jezik tastature za pretragu",
+        kbExplain = "Jezik u aplikaciji i jezik tastature u pretrazi na boksu moraju da se poklapaju, inače se unose pogrešna slova. Podešava se samo jednom.",
+        step1 = "1. U aplikaciji",
+        step2 = "2. Na boksu",
+        step2Text = { n -> "Dodirni dugme ispod. Na TV-u se otvara lista jezika. Tasterima ▲ ▼ izaberi $n i potvrdi sa OK." },
+        openLang = "Otvori izbor jezika na TV-u",
+        notConnected = "Boks nije povezan",
+        done = "Gotovo",
+        up = "Gore",
+        down = "Dole",
+        left = "Levo",
+        right = "Desno",
+        settings = "Podešavanja",
+        chTitle = "Lista kanala",
+        syncNever = "Lista kanala još nije preuzeta.",
+        syncLast = { d, n -> "Poslednja sinhronizacija: $d · $n pozicija" },
+        syncRunning = "Preuzimam listu kanala…",
+        syncFailed = "Poslednji pokušaj nije uspeo, koristim prethodnu listu.",
+        syncNow = "Ažuriraj sada",
+        cancel = "Otkaži",
+        showList = "Prikaži preuzetu listu",
+        drumEmpty = "Lista kanala se preuzima…",
+        drumHint = "Kanal · dodirni za promenu",
+        stepLabel = "Pauza između koraka pri pretrazi (ms)",
+        stepHint = "Manji broj = brže kucanje (5–1000). Ako slova nedostaju, povećaj ga.",
+        homeLabel = "Čekanje posle Početne (ms)",
+        homeHint = "Koliko aplikacija čeka posle Početne pre nego što pošalje ◀ (50–5000). Ako se pretraga ne otvori, povećaj ga.",
+        screenLabel = "Čekanje na otvaranje pretrage (ms)",
+        screenHint = "Koliko aplikacija čeka posle ◀ da EON otvori pretragu (100–5000). Ako se prvo slovo ne unese, povećaj ga.",
+        kbMustMatch = "Mora da se poklapa sa jezikom tastature u pretrazi na boksu.",
+        kbSetOnBox = "Podesi jezik i na boksu",
+        appLang = "Jezik aplikacije",
+        auto = "Automatski",
+        vibrate = "Vibracija pri pritisku",
+        save = "Sačuvaj",
+        home = "Početna",
+        search = "Traži",
+        volume = "Jačina",
+        channel = "Kanal",
+        notPaired = "Boks nije uparen  ·  Poveži",
+        connectedTo = { n -> "Povezano  ·  $n" },
+        pickBox = "Izaberi boks",
+        addBox = "Dodaj boks",
+        rename = "Preimenuj",
+        remove = "Ukloni",
+        boxName = "Ime boksa",
+        boxDefault = { n -> "Boks $n" },
+        startLabel = "Pri pokretanju aplikacije",
+        startAsk = "Pitaj za boks",
+        startLast = "Poslednji korišćen",
+        repairThis = "Ponovo upari ovaj boks",
+        searchHint = "Traži na TV-u",
+        tapToType = "Dodirni ovde za kucanje",
+        ready = "Spremno, kucaj",
+        openingSearch = "Otvaram pretragu na TV-u…",
+        close = "Zatvori",
+        liveTv = "TV uživo",
+        connectingTo = { n -> "Povezujem se sa $n…" },
+        notReady = "Još nije povezano",
+        unreachable = "Boks nije dostupan  ·  pokušavam ponovo",
+        tipTitle = "Savet",
+        tipNever = "Ne prikazuj više",
+        tipsSetting = "Prikazuj savete",
+        lastErr = "Poslednja greška veze",
+        needRepairMsg = "Boks ne prepoznaje telefon  ·  dodirni za ponovno uparivanje",
+        advanced = "Napredna podešavanja",
+        welcomeTitle = "Dobro došli",
+        tagline = "džepni daljinski za tvoj EON boks",
+        welcomeText = "Upravljaj EON boksom preko telefona. Prvo izaberi jezik.",
+        phoneLang = "Jezik telefona",
+        next = "Dalje",
+        providerTitle = "Tvoj provajder",
+        providerText = "Kod operatera Telemach Slovenija daljinski prikazuje naprednu funkciju liste kanala za brže prebacivanje.",
+        provTelemach = "Telemach Slovenija",
+        provTelemachSub = "Lista kanala i bubanj",
+        provOther = "Drugo",
+        provOtherSub = "Tasteri TV uživo i Videoklub",
+        start = "Počni",
+        onlyTelemach = "(samo za Telemach Slovenija)",
+        vod = "Videoklub",
+        searchOnTv = "Pretraga na TV-u",
+        boxesSec = "Boksovi",
+        tips = listOf(
+            "Za pauzu i nastavak reprodukcije dodirni OK dva puta.",
+            "Dodirni ime boksa na vrhu za prelazak između boksova.",
+            "Zavrti listu kanala i dodirni kanal za trenutnu promenu.",
+            "Ako pretraga ne radi kako treba, sačekaj nekoliko sekundi pre unosa.",
+            "Jezik tastature u aplikaciji mora da se poklapa sa jezikom pretrage na boksu.",
+            "Boks možeš da preimenuješ preko ⋮ u listi boksova.",
+            "U Podešavanjima biraš da li da pitam za boks pri pokretanju."
+        ),
+    )
+)
