@@ -13,6 +13,7 @@ import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -707,6 +708,58 @@ object Haptics {
     }
 }
 
+// ---------- kode tipk in časi ----------
+
+/** Kode tipk, ki jih pošiljamo boxu (standardne Android kode tipk). */
+object Key {
+    const val HOME = KeyEvent.KEYCODE_HOME
+    const val BACK = KeyEvent.KEYCODE_BACK
+    const val UP = KeyEvent.KEYCODE_DPAD_UP
+    const val DOWN = KeyEvent.KEYCODE_DPAD_DOWN
+    const val LEFT = KeyEvent.KEYCODE_DPAD_LEFT
+    const val RIGHT = KeyEvent.KEYCODE_DPAD_RIGHT
+    const val OK = KeyEvent.KEYCODE_DPAD_CENTER
+    const val VOL_UP = KeyEvent.KEYCODE_VOLUME_UP
+    const val VOL_DOWN = KeyEvent.KEYCODE_VOLUME_DOWN
+    const val MUTE = KeyEvent.KEYCODE_VOLUME_MUTE
+    const val POWER = KeyEvent.KEYCODE_POWER
+    /** Številka n ima kodo DIGIT_0 + n. */
+    const val DIGIT_0 = KeyEvent.KEYCODE_0
+}
+
+/** Kako se tipka pošlje boxu (polje "direction" v protokolu). */
+object KeyDir {
+    const val DOWN = 1   // pritisnjena (držanje)
+    const val UP = 2     // spuščena
+    const val SHORT = 3  // kratek pritisk
+}
+
+/** Časi v milisekundah. */
+object Timing {
+    /** Premor med koraki po menijih boxa. */
+    const val MENU_STEP_MS = 250L
+    /** Premor pred OK, da se izbira v meniju umiri. */
+    const val SETTLE_BEFORE_OK_MS = 600L
+    /** Premor med števkami pri vnosu številke programa. */
+    const val DIGIT_GAP_MS = 100L
+    /** Dolg pritisk na glasnost − utiša zvok. */
+    const val LONG_PRESS_MUTE_MS = 600L
+    /** Ponovni poskus povezave po prekinitvi. */
+    const val RECONNECT_DELAY_MS = 800L
+    /** Pritiski glasnosti, ki čakajo na povezavo, veljajo tako dolgo. */
+    const val QUEUE_MAX_AGE_MS = 4000L
+    /** Premor med čakajočimi pritiski glasnosti ob povezavi. */
+    const val VOLUME_REPLAY_GAP_MS = 80L
+    /** Brez povezave toliko časa: "Box ni dosegljiv". */
+    const val UNREACHABLE_AFTER_MS = 4000L
+    /** Če box toliko časa ne pošlje ničesar, je povezava verjetno mrtva. */
+    const val STALE_CONNECTION_MS = 15000L
+    /** Tipka ostane vidno pogreznjena vsaj toliko časa. */
+    const val MIN_PRESS_VISIBLE_MS = 110L
+    /** Nasvet se pokaže toliko po povezavi. */
+    const val TIP_DELAY_MS = 1500L
+}
+
 // ---------- minimalni protobuf ----------
 
 class PbWriter {
@@ -1027,8 +1080,7 @@ class RemoteConnection(
         }
     }
 
-    /** dir: 1 = tipka pritisnjena, 2 = tipka spuščena, 3 = kratek pritisk */
-    fun key(code: Int, dir: Int = 3) = send(PbWriter().msg(10, PbWriter().int(1, code).int(2, dir)))
+    fun key(code: Int, dir: Int = KeyDir.SHORT) = send(PbWriter().msg(10, PbWriter().int(1, code).int(2, dir)))
 
     /** Lepo zapre povezavo (na ločeni niti, ker zapiranje pošlje boxu sporočilo). */
     fun close() {
@@ -1389,9 +1441,9 @@ class AppState(private val ctx: Context) {
         keys.execute {
             kbOpen = false
             openSearchIfNeeded()   // izbrana je črka A
-            step(19, 250)          // gor -> mikrofon
-            step(22, 250)          // desno -> jezik
-            step(23)               // OK -> seznam jezikov
+            step(Key.UP, Timing.MENU_STEP_MS)          // gor -> mikrofon
+            step(Key.RIGHT, Timing.MENU_STEP_MS)       // desno -> jezik
+            step(Key.OK)               // OK -> seznam jezikov
             kbOpen = false         // po izbiri jezika začnemo iskanje znova
         }
     }
@@ -1511,7 +1563,7 @@ class AppState(private val ctx: Context) {
                     lastError = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
                         .format(java.util.Date()) + "  " + (e.message ?: e.javaClass.simpleName)
                 }
-                if (running && g == gen) Thread.sleep(800)
+                if (running && g == gen) Thread.sleep(Timing.RECONNECT_DELAY_MS)
             }
         }.start()
     }
@@ -1554,12 +1606,12 @@ class AppState(private val ctx: Context) {
     private fun flushVolume() {
         val list = synchronized(volQueue) { volQueue.toList().also { volQueue.clear() } }
         val now = System.currentTimeMillis()
-        val fresh = list.filter { now - it.second < 4000 }
+        val fresh = list.filter { now - it.second < Timing.QUEUE_MAX_AGE_MS }
         if (fresh.isEmpty()) return
         keys.execute {
             for ((code, _) in fresh) {
                 remote?.key(code)
-                Thread.sleep(80)
+                Thread.sleep(Timing.VOLUME_REPLAY_GAP_MS)
             }
         }
     }
@@ -1567,7 +1619,7 @@ class AppState(private val ctx: Context) {
     /** Če box že dolgo ni nič poslal, je povezava verjetno mrtva: začni znova. */
     fun ensureFresh() {
         val r = remote ?: return
-        if (running && System.currentTimeMillis() - r.lastRx > 15000) r.close()
+        if (running && System.currentTimeMillis() - r.lastRx > Timing.STALE_CONNECTION_MS) r.close()
     }
 
     /** Box ni dosegljiv 4 sekunde: zavrzi čakajoče pritiske. */
@@ -1620,24 +1672,24 @@ class AppState(private val ctx: Context) {
         if (blocked()) return
         closeSearch()
         ledTick++
-        keys.execute { remote?.key(code, 3) }
+        keys.execute { remote?.key(code, KeyDir.SHORT) }
     }
 
     /** Pravo držanje: tipka pritisnjena. */
     fun keyDown(code: Int) {
         if (!connected && paired) {
-            if (code == 24) queueVolume(24) else blocked()
+            if (code == Key.VOL_UP) queueVolume(Key.VOL_UP) else blocked()
             return
         }
         closeSearch()
         ledTick++
-        keys.execute { remote?.key(code, 1) }
+        keys.execute { remote?.key(code, KeyDir.DOWN) }
     }
 
     /** Pravo držanje: tipka spuščena. */
     fun keyUp(code: Int) {
         if (!connected) return
-        keys.execute { remote?.key(code, 2) }
+        keys.execute { remote?.key(code, KeyDir.UP) }
     }
 
     fun saveTimings(step: Int, home: Int, screen: Int) {
@@ -1723,23 +1775,23 @@ class AppState(private val ctx: Context) {
     private val muteRunnable = Runnable {
         minusMuted = true
         if (!connected && paired) {
-            queueVolume(164)
+            queueVolume(Key.MUTE)
         } else {
             ledTick++
-            keys.execute { remote?.key(164) }
+            keys.execute { remote?.key(Key.MUTE) }
         }
     }
 
     fun volMinusDown() {
         closeSearch()
         minusMuted = false
-        main.postDelayed(muteRunnable, 600)
+        main.postDelayed(muteRunnable, Timing.LONG_PRESS_MUTE_MS)
     }
 
     fun volMinusUp() {
         main.removeCallbacks(muteRunnable)
         if (!minusMuted) {
-            if (!connected && paired) queueVolume(25) else press(25)
+            if (!connected && paired) queueVolume(Key.VOL_DOWN) else press(Key.VOL_DOWN)
         }
     }
 
@@ -1750,7 +1802,7 @@ class AppState(private val ctx: Context) {
         entry = if (now - lastDigit < 2000 && entry.length < 4) entry + n else n.toString()
         lastDigit = now
         entry.toIntOrNull()?.let { if (it > 0) saveChannel(it) }
-        press(7 + n)
+        press(Key.DIGIT_0 + n)
     }
 
     /** Tipka Videoklub: Domov, desno, desno, OK. */
@@ -1760,10 +1812,10 @@ class AppState(private val ctx: Context) {
         ledTick++
         keys.execute {
             kbOpen = false
-            step(3, homeWait.toLong())
-            step(22, 250)
-            step(22, 600)   // počakaj, da se izbira umiri, sicer box OK prezre
-            step(23)
+            step(Key.HOME, homeWait.toLong())
+            step(Key.RIGHT, Timing.MENU_STEP_MS)
+            step(Key.RIGHT, Timing.SETTLE_BEFORE_OK_MS)   // izbira se mora umiriti, sicer box OK prezre
+            step(Key.OK)
             kbOpen = false
         }
     }
@@ -1775,10 +1827,10 @@ class AppState(private val ctx: Context) {
         ledTick++
         keys.execute {
             kbOpen = false
-            step(3, homeWait.toLong())
-            step(22, 250)
-            step(20, 600)   // počakaj, da se izbira umiri, sicer box OK prezre
-            step(23)
+            step(Key.HOME, homeWait.toLong())
+            step(Key.RIGHT, Timing.MENU_STEP_MS)
+            step(Key.DOWN, Timing.SETTLE_BEFORE_OK_MS)   // izbira se mora umiriti, sicer box OK prezre
+            step(Key.OK)
             kbOpen = false
         }
     }
@@ -1792,10 +1844,10 @@ class AppState(private val ctx: Context) {
         ledTick++
         keys.execute {
             for (ch in c.toString()) {
-                remote?.key(7 + (ch - '0'))
-                Thread.sleep(100)
+                remote?.key(Key.DIGIT_0 + (ch - '0'))
+                Thread.sleep(Timing.DIGIT_GAP_MS)
             }
-            remote?.key(23)
+            remote?.key(Key.OK)
         }
     }
 
@@ -1844,20 +1896,20 @@ class AppState(private val ctx: Context) {
     }
 
     private fun moveTo(tr: Int, tc: Int) {
-        while (kr < tr) { step(20); kr++ }
-        while (kr > tr) { step(19); kr-- }
-        while (kc < tc) { step(22); kc++ }
-        while (kc > tc) { step(21); kc-- }
+        while (kr < tr) { step(Key.DOWN); kr++ }
+        while (kr > tr) { step(Key.UP); kr-- }
+        while (kc < tc) { step(Key.RIGHT); kc++ }
+        while (kc > tc) { step(Key.LEFT); kc-- }
     }
 
     private fun openSearchIfNeeded() {
         if (kbOpen) return
-        step(3, homeWait.toLong())     // Domov, počakaj, da se naloži
-        step(21)                       // levo -> lupa
-        step(21)                       // levo (zavarovanje)
-        step(21, screenWait.toLong())  // levo (zavarovanje), odpre iskanje
-        step(20)                       // dol -> mikrofon
-        step(20)                       // dol -> A
+        step(Key.HOME, homeWait.toLong())     // Domov, počakaj, da se naloži
+        step(Key.LEFT)                       // levo -> lupa
+        step(Key.LEFT)                       // levo (zavarovanje)
+        step(Key.LEFT, screenWait.toLong())  // levo (zavarovanje), odpre iskanje
+        step(Key.DOWN)                       // dol -> mikrofon
+        step(Key.DOWN)                       // dol -> A
         kr = 1
         kc = 0
         kbOpen = true
@@ -1873,15 +1925,15 @@ class AppState(private val ctx: Context) {
             // briši: nad E je tipka za brisanje, na njej ostanemo
             if (kr != 0) {
                 moveTo(1, 5)
-                step(19, 250)
+                step(Key.UP, Timing.MENU_STEP_MS)
                 kr = 0
             }
-            repeat(del) { step(23, press) }
+            repeat(del) { step(Key.OK, press) }
         }
         if (add.isNotEmpty() && kr == 0) {
             // z brisanja nazaj na tipkovnico, na A
-            step(20, 250)
-            repeat(5) { step(21) }
+            step(Key.DOWN, Timing.MENU_STEP_MS)
+            repeat(5) { step(Key.LEFT) }
             kr = 1
             kc = 0
         }
@@ -1889,16 +1941,16 @@ class AppState(private val ctx: Context) {
             if (tr == -1) {
                 // presledek: z vrstice Ž, stolpec 2, en korak dol
                 moveTo(5, 2)
-                step(20)
-                step(23, press)
-                step(19)
-                repeat(5) { step(21) }
+                step(Key.DOWN)
+                step(Key.OK, press)
+                step(Key.UP)
+                repeat(5) { step(Key.LEFT) }
                 kr = 5
                 kc = 0
                 continue
             }
             moveTo(tr, tc)
-            step(23, press)
+            step(Key.OK, press)
         }
     }
 }
@@ -2534,13 +2586,13 @@ fun LangScreen(s: AppState) {
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
         ) {
-            RoundKey(52.dp, onDown = { s.press(19) }) {
+            RoundKey(52.dp, onDown = { s.press(Key.UP) }) {
                 Icon(Icons.Filled.KeyboardArrowUp, contentDescription = t.up, modifier = Modifier.size(28.dp), tint = TextColor)
             }
-            RoundKey(52.dp, onDown = { s.press(23) }, brush = Brush.verticalGradient(listOf(Color(0xFF5B9BFF), Color(0xFF2F6FE4)))) {
+            RoundKey(52.dp, onDown = { s.press(Key.OK) }, brush = Brush.verticalGradient(listOf(Color(0xFF5B9BFF), Color(0xFF2F6FE4)))) {
                 Text("OK", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
-            RoundKey(52.dp, onDown = { s.press(20) }) {
+            RoundKey(52.dp, onDown = { s.press(Key.DOWN) }) {
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = t.down, modifier = Modifier.size(28.dp), tint = TextColor)
             }
         }
@@ -2853,7 +2905,7 @@ fun RoundKey(
                     up()
                     scope.launch {
                         val held = System.currentTimeMillis() - t0
-                        if (held < 110) delay(110 - held)
+                        if (held < Timing.MIN_PRESS_VISIBLE_MS) delay(Timing.MIN_PRESS_VISIBLE_MS - held)
                         // počasen povratek z rahlim odbojem
                         sink.animateTo(-0.2f, tween(520, easing = FastOutSlowInEasing))
                         sink.animateTo(0f, tween(230, easing = FastOutSlowInEasing))
@@ -3017,7 +3069,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                     Haptics.tick(view)
                     val t0 = System.currentTimeMillis()
                     if (hypot(dx, dy) < c * 0.37f) {
-                        s.press(23)
+                        s.press(Key.OK)
                         scope.launch {
                             okFace.snapTo(0f)
                             okFace.animateTo(1f, tween(420, easing = LinearEasing))
@@ -3026,7 +3078,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                         tryAwaitRelease()
                         scope.launch {
                             val held = System.currentTimeMillis() - t0
-                            if (held < 110) delay(110 - held)
+                            if (held < Timing.MIN_PRESS_VISIBLE_MS) delay(Timing.MIN_PRESS_VISIBLE_MS - held)
                             okScale.release(1f, 0.93f)
                         }
                     } else {
@@ -3037,7 +3089,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                             a > 45 && a <= 135 -> 2
                             else -> 3
                         }
-                        val code = intArrayOf(19, 22, 20, 21)[dir]
+                        val code = intArrayOf(Key.UP, Key.RIGHT, Key.DOWN, Key.LEFT)[dir]
                         lit = dir
                         val r = bounds[0]
                         val off = r.width * 0.19f
@@ -3056,7 +3108,7 @@ fun DPad(s: AppState, diameter: Dp, k: Float) {
                         s.keyUp(code)
                         scope.launch {
                             val held = System.currentTimeMillis() - t0
-                            if (held < 110) delay(110 - held)
+                            if (held < Timing.MIN_PRESS_VISIBLE_MS) delay(Timing.MIN_PRESS_VISIBLE_MS - held)
                             launch { rx.release(0f, tx) }
                             launch { ry.release(0f, ty) }
                             dsc.release(1f, 0.98f)
@@ -3144,7 +3196,7 @@ fun StatusBar(s: AppState) {
     // po 4 sekundah brez povezave: "Box ni dosegljiv"
     LaunchedEffect(s.connected, s.paired) {
         if (!s.connected && s.paired) {
-            delay(4000)
+            delay(Timing.UNREACHABLE_AFTER_MS)
             if (!s.connected) s.markUnreachable()
         }
     }
@@ -3772,7 +3824,7 @@ fun RemoteScreen(s: AppState) {
                 if (s.connected && s.tipShow < 0) {
                     val i = s.tipDue()
                     if (i >= 0) {
-                        delay(1500)
+                        delay(Timing.TIP_DELAY_MS)
                         s.tipShow = i
                     }
                 }
@@ -3809,7 +3861,7 @@ fun RemoteScreen(s: AppState) {
                 ) {
                     // vklop/izklop
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        RoundKey(48.dp * k, onDown = { s.press(26) }) {
+                        RoundKey(48.dp * k, onDown = { s.press(Key.POWER) }) {
                             PowerIcon(22.dp * k)
                         }
                     }
@@ -3847,10 +3899,10 @@ fun RemoteScreen(s: AppState) {
                     // nazaj, domov, išči
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            RoundKey(big, onDown = { s.press(4) }) { IconLabel(Icons.Filled.ArrowBack, t.back, k) }
+                            RoundKey(big, onDown = { s.press(Key.BACK) }) { IconLabel(Icons.Filled.ArrowBack, t.back, k) }
                         }
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            RoundKey(big, onDown = { s.press(3) }) { IconLabel(Icons.Filled.Home, t.home, k) }
+                            RoundKey(big, onDown = { s.press(Key.HOME) }) { IconLabel(Icons.Filled.Home, t.home, k) }
                         }
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             RoundKey(big, onDown = { s.openSearchUi() }) {
@@ -3873,7 +3925,7 @@ fun RemoteScreen(s: AppState) {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(8.dp * k)
                             ) {
-                                RoundKey(small, onDown = { s.keyDown(24) }, onUp = { s.keyUp(24) }) {
+                                RoundKey(small, onDown = { s.keyDown(Key.VOL_UP) }, onUp = { s.keyUp(Key.VOL_UP) }) {
                                     Text("+", fontSize = (28 * k).sp, color = TextColor)
                                 }
                                 RoundKey(small, onDown = { s.volMinusDown() }, onUp = { s.volMinusUp() }) {
