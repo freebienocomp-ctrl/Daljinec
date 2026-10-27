@@ -3,6 +3,8 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,3 +22,16 @@ jobs:
         with:
           name: daljinec-apk
           path: build/outputs/apk/debug/*.apk
+      # Objavi APK kot Release, da je vedno na isti povezavi:
+      # https://github.com/freebienocomp-ctrl/Daljinec/releases/latest/download/PocketRemote.apk
+      - name: Objavi APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MSG: ${{ github.event.head_commit.message }}
+          N: ${{ github.run_number }}
+        run: |
+          cp build/outputs/apk/debug/*.apk PocketRemote.apk
+          gh release create "build-$N" PocketRemote.apk \
+            --title "Pocket Remote, gradnja $N" \
+            --notes "${MSG:-Ročna gradnja}" \
+            --latest
